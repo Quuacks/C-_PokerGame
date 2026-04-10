@@ -21,7 +21,7 @@ public:
     {
         AcceptIncomingConnections();
         std::string msgBuffer;
-        bool received = TryAcceptMessages(msgBuffer);
+        bool received = TryAcceptMessage(msgBuffer);
         if (received) {
             onReceiveMessage(msgBuffer);
         }
@@ -34,9 +34,9 @@ private:
     }
 
     // returns true if a message was received, else - false.
-    bool TryAcceptMessages(std::string& messageStr) 
+    bool TryAcceptMessage(std::string& messageStr) 
     {
-
+        return true;
     }
 };
 

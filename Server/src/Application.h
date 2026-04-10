@@ -3,16 +3,18 @@
 #include <chrono>
 #include <thread>
 #include "NetworkManager.h"
+#include "core/Logging.h"
 
 class Application
 {
 public:
     explicit Application() 
     {
-
+        LOG_TRACE("Log test {}", "a");
+        MainLoop();
     }
 private:
-    void Update() 
+    void MainLoop() 
     {
         while (true) 
         {
