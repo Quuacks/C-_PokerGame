@@ -1,33 +1,28 @@
 #pragma once
 #include <string>
+#include <chrono>
+#include <thread>
 #include "NetworkManager.h"
 
 class Application
 {
 public:
-    explicit Application() {
+    explicit Application() 
+    {
 
     }
-
 private:
-    void AcceptIncomingConnections() {
-
+    void Update() 
+    {
+        while (true) 
+        {
+            m_NetworkManager.Update([&](const std::string& msg) { OnReceiveMessage(msg); });
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
     }
-
-    std::string TryAcceptMessages() {
-
-    }
-
-    void SendPendingMessages() {
-
-    }
-
-    void Update() {
-        m_NetworkManager.Update([&](const std::string& msg) { OnReceiveMessage(msg); });
-    }
-
 private:
-    void OnReceiveMessage(const std::string& message) {
+    void OnReceiveMessage(const std::string& message) 
+    {
 
     }
 private:

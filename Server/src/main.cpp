@@ -1,6 +1,7 @@
 #include <iostream>
+#include "Application.h"
 
 int main()
 {
-    std::cout << "Server\n";
+    Application app;
 }
