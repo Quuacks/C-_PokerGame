@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\messageHandlers\createGameRequestHandler.cpp" />
     <ClCompile Include="src\game\room.cpp" />
     <ClCompile Include="src\game\player.cpp" />
     <ClCompile Include="src\game\roomManager.cpp" />
@@ -139,6 +140,8 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\messageHandlers\createGameRequestHandler.h" />
+    <ClInclude Include="src\messageHandlers\requestHandler.h" />
     <ClInclude Include="src\game\room.h" />
     <ClInclude Include="src\game\player.h" />
     <ClInclude Include="src\game\roomManager.h" />

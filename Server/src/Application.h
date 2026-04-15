@@ -2,8 +2,9 @@
 #include <string>
 #include <chrono>
 #include <thread>
-#include "NetworkManager.h"
-#include "core/Logging.h"
+#include "networkManager.h"
+#include "game/roomManager.h"
+#include "core/logging.h"
 
 class Application
 {
@@ -28,6 +29,7 @@ private:
 
     }
 private:
+    RoomManager m_RoomManager;
     NetworkManager m_NetworkManager;
 };
 
