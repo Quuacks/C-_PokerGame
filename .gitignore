@@ -70,7 +70,7 @@ Testing/
 
 .vs
 
-*.vcxproj*
+*.vcxproj.filters
 *.tlog
 *.idb
 *.exe*
