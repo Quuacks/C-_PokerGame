@@ -1,5 +1,4 @@
 #define FMT_UNICODE 0
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #include <spdlog/spdlog.h>
 
 #define LOG_TRACE(...) SPDLOG_TRACE(__VA_ARGS__)
