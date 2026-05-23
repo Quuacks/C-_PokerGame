@@ -1,243 +1,288 @@
-// UI.cpp : Defines the entry point for the application.
-//
-
 #include "framework.h"
 #include "UI.h"
 #include <windows.h>
 #include <commctrl.h>
+#include <vector>
+#include <string>
+
 #pragma comment(lib, "comctl32.lib")
 
-#define MAX_LOADSTRING 100
+#define ID_BTN_RAISE  1001
+#define ID_BTN_CALL   1002
+#define ID_BTN_CHECK  1003
+#define ID_BTN_FOLD   1004
+#define ID_SLIDER     2001
+#define ID_COMBO_HAND 3001
+#define ID_LIST_PLAYERS 3002
 
-// Global Variables:
-HINSTANCE hInst;                                // current instance
-WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-
-// Forward declarations of functions included in this code module:
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-BOOL                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+struct Card
 {
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
+    int rank;
+    int suit;
+};
 
-    // TODO: Place code here.
+struct GameState
+{
+    std::vector<Card> boardCards;
+    std::vector<Card> heroCards;
+    int pot;
+    std::vector<std::wstring> players;
+    int selectedComboIndex;
+};
 
-    // Initialize global strings
-    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-    LoadStringW(hInstance, IDC_UI, szWindowClass, MAX_LOADSTRING);
-    MyRegisterClass(hInstance);
+HINSTANCE hInst;
+HWND g_hSlider;
+HWND g_btnRaise, g_btnCall, g_btnCheck, g_btnFold;
+HWND g_comboHands, g_listPlayers;
+int g_potAmount = 0;
+std::vector<Card> g_boardCards;
+std::vector<Card> g_heroCards;
+std::vector<std::wstring> g_players;
+int g_selectedComboIndex = 0;
 
-    // Perform application initialization:
-    if (!InitInstance (hInstance, nCmdShow))
-    {
-        return FALSE;
-    }
+ATOM MyRegisterClass(HINSTANCE hInstance);
+BOOL InitInstance(HINSTANCE, int);
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-    HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_UI));
+void PositionControls(HWND hWnd)
+{
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
 
-    MSG msg;
+    int bottomHeight = 80;
+    int sideWidth = w / 6;
+    int btnWidth = w / 10;
+    int btnHeight = 40;
+    int margin = 20;
 
-    // Main message loop:
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
+    int yButtons = h - bottomHeight + (bottomHeight - btnHeight) / 2;
 
-    return (int) msg.wParam;
+    MoveWindow(g_btnRaise, margin, yButtons, btnWidth, btnHeight, TRUE);
+    MoveWindow(g_btnCall, margin + btnWidth + 10, yButtons, btnWidth, btnHeight, TRUE);
+    MoveWindow(g_btnCheck, margin + 2 * (btnWidth + 10), yButtons, btnWidth, btnHeight, TRUE);
+    MoveWindow(g_btnFold, margin + 3 * (btnWidth + 10), yButtons, btnWidth, btnHeight, TRUE);
+
+    MoveWindow(g_hSlider, margin, yButtons - 40, btnWidth, 30, TRUE);
+
+    MoveWindow(g_comboHands, margin, margin, sideWidth - 2 * margin, 200, TRUE);
+    MoveWindow(g_listPlayers, w - sideWidth + margin, margin, sideWidth - 2 * margin, h - 2 * margin - bottomHeight, TRUE);
 }
 
+void FillHandsCombo()
+{
+    const wchar_t* hands[] = {
+        L"High Card",
+        L"One Pair",
+        L"Two Pair",
+        L"Three of a Kind",
+        L"Straight",
+        L"Flush",
+        L"Full House",
+        L"Four of a Kind",
+        L"Straight Flush",
+        L"Royal Flush"
+    };
+    for (auto& h : hands)
+        SendMessage(g_comboHands, CB_ADDSTRING, 0, (LPARAM)h);
+    SendMessage(g_comboHands, CB_SETCURSEL, g_selectedComboIndex, 0);
+}
 
+void UpdateUIFromGameState(HWND hWnd, const GameState& state)
+{
+    g_boardCards = state.boardCards;
+    g_heroCards = state.heroCards;
+    g_potAmount = state.pot;
+    g_players = state.players;
+    g_selectedComboIndex = state.selectedComboIndex;
 
-//
-//  FUNCTION: MyRegisterClass()
-//
-//  PURPOSE: Registers the window class.
-//
+    SendMessage(g_comboHands, CB_SETCURSEL, g_selectedComboIndex, 0);
+
+    SendMessage(g_listPlayers, LB_RESETCONTENT, 0, 0);
+    for (auto& p : g_players)
+        SendMessage(g_listPlayers, LB_ADDSTRING, 0, (LPARAM)p.c_str());
+
+    InvalidateRect(hWnd, nullptr, TRUE);
+}
+
+void DrawCard(HDC hdc, int x, int y, int w, int h, const Card& c)
+{
+    Rectangle(hdc, x, y, x + w, y + h);
+
+    wchar_t buf[16];
+    const wchar_t* ranks = L" A23456789TJQK";
+    const wchar_t* suits[] = { L"♣", L"♦", L"♥", L"♠" };
+
+    wchar_t r = ranks[c.rank];
+    const wchar_t* s = suits[c.suit % 4];
+    wsprintf(buf, L"%c%s", r, s);
+
+    SetBkMode(hdc, TRANSPARENT);
+    RECT cardRect = { x + 5, y + 5, x + w - 5, y + h - 5 };
+    DrawText(hdc, buf, -1, &cardRect, DT_LEFT | DT_TOP);
+}
+
+void DrawTable(HDC hdc, RECT rc)
+{
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+    int bottomHeight = 80;
+    int sideWidth = w / 6;
+
+    RECT center;
+    center.left = rc.left + sideWidth;
+    center.right = rc.right - sideWidth;
+    center.top = rc.top + 60;
+    center.bottom = rc.bottom - bottomHeight - 20;
+
+    HBRUSH tableBrush = CreateSolidBrush(RGB(0, 100, 0));
+    FillRect(hdc, &center, tableBrush);
+    DeleteObject(tableBrush);
+
+    wchar_t potBuf[64];
+    wsprintf(potBuf, L"Pot: %d", g_potAmount);
+    SetBkMode(hdc, TRANSPARENT);
+    RECT potRect = { (w / 2) - 100, rc.top + 10, (w / 2) + 100, rc.top + 40 };
+    DrawText(hdc, potBuf, -1, &potRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    int cardW = 60;
+    int cardH = 90;
+    int spacing = 10;
+
+    int boardCount = (int)g_boardCards.size();
+    int totalBoardWidth = boardCount * cardW + (boardCount - 1) * spacing;
+    int startX = (center.left + center.right - totalBoardWidth) / 2;
+    int y = center.top + 40;
+
+    for (int i = 0; i < boardCount; ++i)
+        DrawCard(hdc, startX + i * (cardW + spacing), y, cardW, cardH, g_boardCards[i]);
+
+    int heroCount = (int)g_heroCards.size();
+    int totalHeroWidth = heroCount * cardW + (heroCount - 1) * spacing;
+    int heroX = (center.left + center.right - totalHeroWidth) / 2;
+    int heroY = center.bottom - cardH - 40;
+
+    for (int i = 0; i < heroCount; ++i)
+        DrawCard(hdc, heroX + i * (cardW + spacing), heroY, cardW, cardH, g_heroCards[i]);
+}
+
+int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
+{
+    INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_BAR_CLASSES | ICC_STANDARD_CLASSES };
+    InitCommonControlsEx(&icex);
+
+    MyRegisterClass(hInstance);
+    if (!InitInstance(hInstance, nCmdShow)) return FALSE;
+
+    MSG msg;
+    while (GetMessage(&msg, nullptr, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    return (int)msg.wParam;
+}
+
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-    WNDCLASSEXW wcex;
-
-    wcex.cbSize = sizeof(WNDCLASSEX);
-
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_UI));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_UI);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
-
+    WNDCLASSEXW wcex = { sizeof(WNDCLASSEX) };
+    wcex.lpfnWndProc = WndProc;
+    wcex.hInstance = hInstance;
+    wcex.lpszClassName = L"PokerUI";
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     return RegisterClassExW(&wcex);
 }
 
-//
-//   FUNCTION: InitInstance(HINSTANCE, int)
-//
-//   PURPOSE: Saves instance handle and creates main window
-//
-//   COMMENTS:
-//
-//        In this function, we save the instance handle in a global variable and
-//        create and display the main program window.
-//
-
-HWND g_hSlider;
-
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   hInst = hInstance; // Store instance handle in our global variable
+    hInst = hInstance;
 
-   INITCOMMONCONTROLSEX icex;
-   icex.dwSize = sizeof(icex);
-   icex.dwICC = ICC_BAR_CLASSES;
-   InitCommonControlsEx(&icex);
+    HWND hWnd = CreateWindowW(L"PokerUI", L"Poker Game",
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, 1280, 720,
+        nullptr, nullptr, hInstance, nullptr);
+    if (!hWnd) return FALSE;
 
-#define ID_BTN_RAISE 1001
-#define ID_BTN_FOLD  1002
-#define ID_SLIDER    2001
+    g_btnRaise = CreateWindow(L"BUTTON", L"Raise",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        0, 0, 0, 0, hWnd, (HMENU)ID_BTN_RAISE, hInst, nullptr);
+    g_btnCall = CreateWindow(L"BUTTON", L"Call",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CALL, hInst, nullptr);
+    g_btnCheck = CreateWindow(L"BUTTON", L"Check",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CHECK, hInst, nullptr);
+    g_btnFold = CreateWindow(L"BUTTON", L"Fold",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        0, 0, 0, 0, hWnd, (HMENU)ID_BTN_FOLD, hInst, nullptr);
 
-   //WINDOW
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+    g_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, L"",
+        WS_CHILD | TBS_AUTOTICKS,
+        0, 0, 0, 0, hWnd, (HMENU)ID_SLIDER, hInst, nullptr);
+    SendMessage(g_hSlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
+    SendMessage(g_hSlider, TBM_SETPOS, TRUE, 10);
 
-   //RAISE BUTTON
-   HWND hButton1 = CreateWindow(
-       L"BUTTON",                  // Predefined class
-       L"Raise",              // Button text
-       WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-       50, 150,                     // x, y position
-       120, 40,                    // width, height
-       hWnd,                       // Parent window
-       (HMENU)ID_BTN_RAISE,                   // Button ID
-       hInstance,
-       nullptr
-   );
-   //FOLD BUTTON
-   HWND hButton2 = CreateWindow(
-       L"BUTTON",
-       L"Fold",
-       WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-       200, 150,
-       120, 40,
-       hWnd,
-       (HMENU)ID_BTN_FOLD,                   // Different ID
-       hInstance,
-       nullptr
-   );
-   // SLIDER ABOVE RAISE
-   g_hSlider = CreateWindowEx(
-       0,
-       TRACKBAR_CLASS,
-       L"",
-       WS_CHILD | TBS_AUTOTICKS,   // NOT visible yet
-       50, 50,                     // position ABOVE the Raise button
-       200, 30,
-       hWnd,
-       (HMENU)ID_SLIDER,
-       hInst,
-       nullptr
-   );
-   SendMessage(g_hSlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100)); // 0–100 chips
-   SendMessage(g_hSlider, TBM_SETPOS, TRUE, 10); // default value
-  int value = SendMessage(g_hSlider, TBM_GETPOS, 0, 0); // sends the amount of chips
+    g_comboHands = CreateWindow(WC_COMBOBOX, L"",
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
+        0, 0, 0, 0, hWnd, (HMENU)ID_COMBO_HAND, hInst, nullptr);
 
-   if (!hWnd)
-   {
-      return FALSE;
-   }
+    g_listPlayers = CreateWindow(WC_LISTBOX, L"",
+        WS_CHILD | WS_VISIBLE | LBS_NOTIFY,
+        0, 0, 0, 0, hWnd, (HMENU)ID_LIST_PLAYERS, hInst, nullptr);
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+    FillHandsCombo();
+    PositionControls(hWnd);
 
-   return TRUE;
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
+    GameState demo;
+    demo.pot = 120;
+    demo.boardCards = { {10,3},{11,3},{12,3},{13,3},{1,3} };
+    demo.heroCards = { {14,3},{14,1} };
+    demo.players = { L"Player 1", L"Player 2", L"Player 3" };
+    demo.selectedComboIndex = 9;
+    UpdateUIFromGameState(hWnd, demo);
+
+    return TRUE;
 }
 
-//
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE: Processes messages for the main window.
-//
-//  WM_COMMAND  - process the application menu
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
-//
-//
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    switch (message)
+    switch (msg)
     {
-    case WM_COMMAND:
-        {
-            int wmId = LOWORD(wParam);
-            // Parse the menu selections:
-            switch (wmId)
-            {
-            case ID_BTN_RAISE:
-                ShowWindow(g_hSlider, SW_SHOW);
-                UpdateWindow(g_hSlider);
-                break;
+    case WM_SIZE:
+        PositionControls(hWnd);
+        break;
 
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
-            }
-        }
-        break;
-    case WM_PAINT:
+    case WM_COMMAND:
+        switch (LOWORD(wParam))
         {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: Add any drawing code that uses hdc here...
-            EndPaint(hWnd, &ps);
+        case ID_BTN_RAISE:
+            ShowWindow(g_hSlider, SW_SHOW);
+            break;
+        case ID_BTN_CALL:
+        case ID_BTN_CHECK:
+        case ID_BTN_FOLD:
+            ShowWindow(g_hSlider, SW_HIDE);
+            break;
         }
         break;
+
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+        DrawTable(hdc, rc);
+        EndPaint(hWnd, &ps);
+    }
+    break;
+
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
-    default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
     }
-    return 0;
+    return DefWindowProc(hWnd, msg, wParam, lParam);
 }
-
-// Message handler for about box.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    UNREFERENCED_PARAMETER(lParam);
-    switch (message)
-    {
-    case WM_INITDIALOG:
-        return (INT_PTR)TRUE;
-
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-        {
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
-        }
-        break;
-    }
-    return (INT_PTR)FALSE;
-}
-
