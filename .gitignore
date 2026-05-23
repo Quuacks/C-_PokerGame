@@ -74,3 +74,6 @@ Testing/
 *.tlog
 *.idb
 *.exe*
+
+Server/x32
+Server/x64

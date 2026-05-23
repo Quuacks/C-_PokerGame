@@ -131,23 +131,31 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\game\deck.cpp" />
+    <ClCompile Include="src\game\handEvaluator.cpp" />
+    <ClCompile Include="src\game\handEvaluator.h" />
     <ClCompile Include="src\messageHandlers\createGameRequestHandler.cpp" />
     <ClCompile Include="src\game\room.cpp" />
     <ClCompile Include="src\game\player.cpp" />
     <ClCompile Include="src\game\roomManager.cpp" />
-    <ClCompile Include="src\networkManager.cpp" />
+    <ClCompile Include="src\messageHandlers\joinGameRequestHandler.cpp" />
+    <ClCompile Include="src\messageHandlers\playerActionRequestHandler.cpp" />
+    <ClCompile Include="src\Network\networkManager.cpp" />
     <ClCompile Include="src\application.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\game\deck.h" />
     <ClInclude Include="src\messageHandlers\createGameRequestHandler.h" />
+    <ClInclude Include="src\messageHandlers\joinGameRequestHandler.h" />
+    <ClInclude Include="src\messageHandlers\playerActionRequestHandler.h" />
     <ClInclude Include="src\messageHandlers\requestHandler.h" />
     <ClInclude Include="src\game\room.h" />
     <ClInclude Include="src\game\player.h" />
     <ClInclude Include="src\game\roomManager.h" />
     <ClInclude Include="src\core\logging.h" />
     <ClInclude Include="src\core\result.h" />
-    <ClInclude Include="src\networkManager.h" />
+    <ClInclude Include="src\Network\networkManager.h" />
     <ClInclude Include="src\application.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
