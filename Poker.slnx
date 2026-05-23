@@ -5,6 +5,7 @@
   </Configurations>
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
+    <File Path="CMakeLists.txt" />
   </Folder>
   <Project Path="Client/Client.vcxproj" Id="f06056d2-1d91-44b1-aae7-adf4a4982ab0" />
   <Project Path="Server/Server.vcxproj" Id="eec18f8f-5f76-4060-a5b4-a8f3bf77f431" />

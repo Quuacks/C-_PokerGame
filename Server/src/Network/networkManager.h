@@ -3,40 +3,31 @@
 #include <functional>
 #include <chrono>
 #include <thread>
+#include <WS2tcpip.h>
+#include <iostream>
 
 class NetworkManager
 { 
 public:
-    explicit NetworkManager() 
-    {
-        // Initialize server
-    }
+    NetworkManager();
+    ~NetworkManager();
 
-    void SendMessage(std::string& message) 
-    {
+    bool Initialize(int port);
 
-    }
+    // Called every frame by Application::MainLoop to poll for data/connections
+    void Update(std::function<void(const std::string&)> messageCallback);
 
-    void Update(std::function<void(const std::string&)> onReceiveMessage) 
-    {
-        AcceptIncomingConnections();
-        std::string msgBuffer;
-        bool received = TryAcceptMessage(msgBuffer);
-        if (received) {
-            onReceiveMessage(msgBuffer);
-        }
-    }
+    // Utility to send data back to a specific socket
+    void SendToClient(SOCKET clientSocket, const std::string& message);
+
+    // Cleanly shuts down all active sockets
+    void Shutdown();
 
 private:
-    void AcceptIncomingConnections() 
-    {
+    SOCKET m_ListeningSocket;
+    std::vector<SOCKET> m_ClientSockets; // Keeps track of all connected poker players
 
-    }
-
-    // returns true if a message was received, else - false.
-    bool TryAcceptMessage(std::string& messageStr) 
-    {
-        return true;
-    }
+    void HandleNewConnections();
+    void PollClientData(std::function<void(const std::string&)> messageCallback);
 };
 
