@@ -4,6 +4,7 @@
 #include <commctrl.h>
 #include <vector>
 #include <string>
+#include <cstdlib>
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -11,7 +12,12 @@
 #define ID_BTN_CALL   1002
 #define ID_BTN_CHECK  1003
 #define ID_BTN_FOLD   1004
+
 #define ID_SLIDER     2001
+#define ID_EDIT_RAISE_AMOUNT  2002
+#define ID_BTN_CONFIRM_RAISE  2003
+#define ID_BTN_CANCEL_RAISE   2004
+
 #define ID_COMBO_HAND 3001
 #define ID_LIST_PLAYERS 3002
 
@@ -31,9 +37,16 @@ struct GameState
 };
 
 HINSTANCE hInst;
+
 HWND g_hSlider;
+HWND g_editRaiseAmount;
+HWND g_btnConfirmRaise;
+HWND g_btnCancelRaise;
+
 HWND g_btnRaise, g_btnCall, g_btnCheck, g_btnFold;
 HWND g_comboHands, g_listPlayers;
+const int MIN_RAISE = 0;
+const int MAX_RAISE = 100;
 int g_potAmount = 0;
 std::vector<Card> g_boardCards;
 std::vector<Card> g_heroCards;
@@ -43,6 +56,42 @@ int g_selectedComboIndex = 0;
 ATOM MyRegisterClass(HINSTANCE hInstance);
 BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+
+void ShowRaiseControls(bool show)
+{
+    int command = show ? SW_SHOW : SW_HIDE;
+
+    ShowWindow(g_hSlider, command);
+    ShowWindow(g_editRaiseAmount, command);
+    ShowWindow(g_btnConfirmRaise, command);
+    ShowWindow(g_btnCancelRaise, command);
+}
+
+void UpdateRaiseAmountText()
+{
+    int amount = (int)SendMessage(g_hSlider, TBM_GETPOS, 0, 0);
+
+    wchar_t buffer[32];
+    wsprintf(buffer, L"%d", amount);
+
+    SetWindowText(g_editRaiseAmount, buffer);
+}
+
+int GetRaiseAmountFromEdit()
+{
+    wchar_t buffer[32];
+    GetWindowText(g_editRaiseAmount, buffer, 32);
+
+    int amount = _wtoi(buffer);
+
+    if (amount < MIN_RAISE)
+        amount = MIN_RAISE;
+
+    if (amount > MAX_RAISE)
+        amount = MAX_RAISE;
+
+    return amount;
+}
 
 void PositionControls(HWND hWnd)
 {
@@ -64,8 +113,36 @@ void PositionControls(HWND hWnd)
     MoveWindow(g_btnCheck, margin + 2 * (btnWidth + 10), yButtons, btnWidth, btnHeight, TRUE);
     MoveWindow(g_btnFold, margin + 3 * (btnWidth + 10), yButtons, btnWidth, btnHeight, TRUE);
 
-    MoveWindow(g_hSlider, margin, yButtons - 40, btnWidth, 30, TRUE);
+    int raiseY = yButtons - 45;
 
+    MoveWindow(g_hSlider, margin, raiseY, btnWidth * 2, 30, TRUE);
+
+    MoveWindow(
+        g_editRaiseAmount,
+        margin + btnWidth * 2 + 10,
+        raiseY,
+        70,
+        25,
+        TRUE
+    );
+
+    MoveWindow(
+        g_btnConfirmRaise,
+        margin + btnWidth * 2 + 90,
+        raiseY,
+        60,
+        25,
+        TRUE
+    );
+
+    MoveWindow(
+        g_btnCancelRaise,
+        margin + btnWidth * 2 + 155,
+        raiseY,
+        70,
+        25,
+        TRUE
+    );
     MoveWindow(g_comboHands, margin, margin, sideWidth - 2 * margin, 200, TRUE);
     MoveWindow(g_listPlayers, w - sideWidth + margin, margin, sideWidth - 2 * margin, h - 2 * margin - bottomHeight, TRUE);
 }
@@ -219,8 +296,44 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     g_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, L"",
         WS_CHILD | TBS_AUTOTICKS,
         0, 0, 0, 0, hWnd, (HMENU)ID_SLIDER, hInst, nullptr);
-    SendMessage(g_hSlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
+
+    SendMessage(g_hSlider, TBM_SETRANGE, TRUE, MAKELPARAM(MIN_RAISE, MAX_RAISE));
     SendMessage(g_hSlider, TBM_SETPOS, TRUE, 10);
+
+    g_editRaiseAmount = CreateWindowW(
+        L"EDIT",
+        L"10",
+        WS_CHILD | WS_BORDER | ES_CENTER | ES_NUMBER,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_EDIT_RAISE_AMOUNT,
+        hInst,
+        nullptr
+    );
+
+    g_btnConfirmRaise = CreateWindowW(
+        L"BUTTON",
+        L"OK",
+        WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_BTN_CONFIRM_RAISE,
+        hInst,
+        nullptr
+    );
+
+    g_btnCancelRaise = CreateWindowW(
+        L"BUTTON",
+        L"Cancel",
+        WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_BTN_CANCEL_RAISE,
+        hInst,
+        nullptr
+    );
+
+    ShowRaiseControls(false);
 
     g_comboHands = CreateWindow(WC_COMBOBOX, L"",
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
@@ -259,13 +372,53 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         switch (LOWORD(wParam))
         {
         case ID_BTN_RAISE:
-            ShowWindow(g_hSlider, SW_SHOW);
+            ShowRaiseControls(true);
+            UpdateRaiseAmountText();
             break;
+
+        case ID_EDIT_RAISE_AMOUNT:
+        {
+            if (HIWORD(wParam) == EN_CHANGE)
+            {
+                int amount = GetRaiseAmountFromEdit();
+                SendMessage(g_hSlider, TBM_SETPOS, TRUE, amount);
+            }
+            break;
+        }
+
+        case ID_BTN_CONFIRM_RAISE:
+        {
+            int raiseAmount = GetRaiseAmountFromEdit();
+
+            wchar_t buffer[32];
+            wsprintf(buffer, L"%d", raiseAmount);
+
+            SetWindowText(g_editRaiseAmount, buffer);
+            SendMessage(g_hSlider, TBM_SETPOS, TRUE, raiseAmount);
+
+            // Frontend-only for now.
+            // Later, this raiseAmount can be sent to the actual game/client logic.
+            ShowRaiseControls(false);
+
+            break;
+        }
+
+        case ID_BTN_CANCEL_RAISE:
+            ShowRaiseControls(false);
+            break;
+
         case ID_BTN_CALL:
         case ID_BTN_CHECK:
         case ID_BTN_FOLD:
-            ShowWindow(g_hSlider, SW_HIDE);
+            ShowRaiseControls(false);
             break;
+        }
+        break;
+
+    case WM_HSCROLL:
+        if ((HWND)lParam == g_hSlider)
+        {
+            UpdateRaiseAmountText();
         }
         break;
 
