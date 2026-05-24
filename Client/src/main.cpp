@@ -23,6 +23,14 @@ int main() {
             return 1;
         }
 
+        std::string username;
+        while (username.empty()) {
+            std::cout << "Enter username: ";
+            std::getline(std::cin, username);
+        }
+
+        client.SendRequest("LOGIN|" + username);
+
         std::cout << "CONECTED\n";
 
         std::string userInput;

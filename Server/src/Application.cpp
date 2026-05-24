@@ -29,40 +29,45 @@ void Application::MainLoop()
 {
 
     while (true) {
-        m_NetworkManager.Update([&](const std::string& msg) {
-            OnReceiveMessage(msg);
-            });
+        m_NetworkManager.Update(
+            m_Players,
+            [&](SOCKET sock, const std::string& msg) { HandleRawMessage(sock, msg); },
+            [&](Player& player, const std::string& msg) { HandlePlayerMessage(player, msg); }
+        );
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
 }
-
-void Application::OnReceiveMessage(const std::string& message)
-{
+void Application::HandleRawMessage(SOCKET rawSocket, const std::string& message) {
     size_t delimiterPos = message.find('|');
-    if (delimiterPos == std::string::npos)
-    {
-        std::cout << "[WARNING] Received malformed message: " << message << "\n";
-        return;
-    }
+    if (delimiterPos == std::string::npos) return;
 
-    // Split the message into type and data payload
-    std::string messageType = message.substr(0, delimiterPos);
+    std::string type = message.substr(0, delimiterPos);
     std::string payload = message.substr(delimiterPos + 1);
 
-    std::cout << "[ROUTER] Type: " << messageType << " | Payload: " << payload << "\n";
+    if (type == "LOGIN") {
+        Player newPlayer(rawSocket, payload);
+        m_Players.push_back(newPlayer);
 
-    //// Route to the appropriate handler
-    //auto it = m_Handlers.find(messageType);
-    //if (it != m_Handlers.end())
-    //{
-    //    // Execute the handler logic
-    //    // Note: Later you'll pass a Player session pointer here instead of nullptr
-    //    it->second->handleRequest(nullptr, payload);
-    //}
-    //else
-    //{
-    //    std::cout << "[WARNING] No handler registered for message type: " << messageType << "\n";
-    //}
+        m_NetworkManager.MoveRawSocketToPlayer(rawSocket);
+
+        std::cout << "[APP] " << payload << " authenticated. Total active players: " << m_Players.size() << "\n";
+        m_NetworkManager.SendToClient(rawSocket, "LOGIN_SUCCESS|Welcome!\n");
+    }
 }
+
+void Application::HandlePlayerMessage(Player& player, const std::string& message) {
+    size_t delimiterPos = message.find('|');
+
+    if (delimiterPos == std::string::npos)
+        return;
+
+    std::string type = message.substr(0, delimiterPos);
+    std::string payload = message.substr(delimiterPos + 1);
+
+    //game logic parsing here. Things like Player Actions
+    std::cout << "TYPE: " << type << "   PAYLOAD: " << payload << "\n";
+}
+
+

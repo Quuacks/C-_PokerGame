@@ -16,12 +16,15 @@ public:
     void Start();
 private:
     void MainLoop();
-    void OnReceiveMessage(const std::string& message);
+    void HandleRawMessage(SOCKET rawSocket, const std::string& message);
+    void HandlePlayerMessage(Player& player, const std::string& message);
     void RegisterHandlers();
 
     RoomManager m_RoomManager;
     NetworkManager m_NetworkManager;
 
     std::map<std::string, std::unique_ptr<RequestHandler>> m_Handlers;
+
+    std::vector<Player> m_Players;
 };
 
