@@ -16,6 +16,10 @@ class NetworkClient
 
         void Disconnect();
 
+        SOCKET getSocket() const {
+            return m_Socket; 
+        }
+
     private:
         SOCKET m_Socket;
         bool m_isConnected;

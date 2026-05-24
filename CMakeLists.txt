@@ -9,6 +9,8 @@ add_executable(PokerServer
     Server/main.cpp 
     Server/application.cpp
     Server/Network/NetworkManager.cpp
+    Server/game/player.cpp
+    Server/game/roomManager.cpp
     # Add your other future files here as you write them:
     # Server/Game/player.cpp
     # Server/Game/room.cpp

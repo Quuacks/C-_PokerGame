@@ -1,6 +1,8 @@
 #include "application.h"
 #include <WS2tcpip.h>
 #include <iostream>
+#include <unordered_map>
+#include <functional>
 #include <nlohmann/json.hpp>
 
 Application::Application()
@@ -10,7 +12,11 @@ Application::Application()
 
 void Application::RegisterHandlers() 
 {
-    std::cout << "Message handlers registered";
+    m_RawHandlers["LOGIN"] = [this](SOCKET sock, const json& data) { HandleLogin(sock, data); };
+
+    // Register Player handlers (authenticated users)
+    m_PlayerHandlers["RAISE"] = [this](Player& p, const json& data) { HandleRaise(p, data); };
+    m_PlayerHandlers["FOLD"] = [this](Player& p, const json& data) { HandleFold(p, data); };
 }
 
 void Application::Start() {
@@ -43,21 +49,22 @@ void Application::MainLoop()
 
 }
 void Application::HandleRawMessage(SOCKET rawSocket, const std::string& message) {
-    size_t delimiterPos = message.find('|');
-    if (delimiterPos == std::string::npos) return;
+    
+    json packet = json::parse(message);
+    std::string type = packet.value("type", "");
+    json data = packet.value("data", json::object());
 
-    std::string type = message.substr(0, delimiterPos);
-    std::string payload = message.substr(delimiterPos + 1);
+    auto it = m_Handlers.find(type);
 
-    if (type == "LOGIN") {
-        Player newPlayer(rawSocket, payload);
-        m_Players.push_back(newPlayer);
-
-        m_NetworkManager.MoveRawSocketToPlayer(rawSocket);
-
-        std::cout << "[APP] " << payload << " authenticated. Total active players: " << m_Players.size() << "\n";
-        m_NetworkManager.SendToClient(rawSocket, "LOGIN_SUCCESS|Welcome!\n");
+    // 2. Make ABSOLUTELY sure the right side matches 'm_Handlers' exactly
+    if (it != m_Handlers.end()) {
+        // 3. Because it's a unique_ptr, execute via the arrow operator
+        //it->second->Execute(rawSocket, data);
     }
+    else {
+        std::cout << "[SERVER] Unknown action type: " << type << "\n";
+    }
+    
 }
 
 void Application::HandlePlayerMessage(Player& player, const std::string& message) {
@@ -72,5 +79,30 @@ void Application::HandlePlayerMessage(Player& player, const std::string& message
     //game logic parsing here. Things like Player Actions
     std::cout << "TYPE: " << type << "   PAYLOAD: " << payload << "\n";
 }
+void Application::HandleLogin(SOCKET rawSocket, const nlohmann::json& data) {
+    // 1. Extract the username from the JSON payload safely
+    // If the "username" key is missing, it defaults to "Unknown_Pro"
+    std::string username = data.value("username", "Unknown_Pro");
 
+    std::cout << "[SERVER] Processing login request for user: " << username << "\n";
+
+
+    std::cout << "[SERVER] User '" << username << "' logged in successfully.\n";
+}
+
+void Application::HandleRaise(Player& player, const nlohmann::json& data) {
+    // 1. Extract the raise amount out of the nested JSON packet
+    int raiseAmount = data.value("amount", 0);
+
+    // 2. Fetch the player's name (assuming your Player class has GetName())
+    std::cout << "[SERVER] Player raised by: " << raiseAmount << " chips.\n";
+
+    
+}
+
+void Application::HandleFold(Player& player, const nlohmann::json& data) {
+    std::cout << "[SERVER] Player folded their hand.\n";
+
+    
+}
 
