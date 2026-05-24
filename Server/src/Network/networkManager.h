@@ -5,6 +5,7 @@
 #include <thread>
 #include <WS2tcpip.h>
 #include <iostream>
+#include <vector>
 
 class NetworkManager
 { 

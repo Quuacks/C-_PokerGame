@@ -7,18 +7,21 @@
 #include "core/logging.h"
 #include <WS2tcpip.h>
 #include <iostream>
+#include <messageHandlers/requestHandler.h>
 
 class Application
 {
 public:
-    explicit Application();
+    Application();
     void Start();
 private:
     void MainLoop();
-private:
     void OnReceiveMessage(const std::string& message);
-private:
+    void RegisterHandlers();
+
     RoomManager m_RoomManager;
     NetworkManager m_NetworkManager;
+
+    std::map<std::string, std::unique_ptr<RequestHandler>> m_Handlers;
 };
 
