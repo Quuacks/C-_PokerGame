@@ -1,6 +1,7 @@
 #include "application.h"
 #include <WS2tcpip.h>
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 Application::Application()
 {
@@ -34,6 +35,8 @@ void Application::MainLoop()
             [&](SOCKET sock, const std::string& msg) { HandleRawMessage(sock, msg); },
             [&](Player& player, const std::string& msg) { HandlePlayerMessage(player, msg); }
         );
+
+        //main game loop
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

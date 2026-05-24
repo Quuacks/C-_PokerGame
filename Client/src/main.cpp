@@ -35,6 +35,8 @@ int main() {
 
         std::string userInput;
 
+        //true pakeist i while(gameState != LEAVE)
+        //Main game loop
         while (true) {
             client.Update([](const std::string& serverMsg) {
                 std::cout << "\n[From Server]: " << serverMsg << "\n";
