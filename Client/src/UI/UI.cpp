@@ -278,36 +278,139 @@ void DrawChipStack(HDC hdc, Gdiplus::Graphics& graphics, int x, int y, int amoun
     SetBkMode(hdc, TRANSPARENT);
     COLORREF previousColor = SetTextColor(hdc, RGB(255, 255, 255));
 
-    wchar_t amountText[128];
-    wsprintf(amountText, L"%s: %d", label.c_str(), amount);
+    if (!label.empty())
+    {
+        wchar_t amountText[128];
+        wsprintf(amountText, L"%s: %d", label.c_str(), amount);
 
-    RECT textRect = {
-        x - 35,
-        y + chipH + 2,
-        x + 155,
-        y + chipH + 28
-    };
+        RECT textRect = {
+            x - 35,
+            y + chipH + 2,
+            x + 155,
+            y + chipH + 28
+        };
 
-    DrawText(hdc, amountText, -1, &textRect, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        DrawText(hdc, amountText, -1, &textRect, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    }
 
     SetTextColor(hdc, previousColor);
 }
 
-POINT GetPlayerChipPosition(int playerIndex, const RECT& tableRect)
+struct PlayerSeatLayout
+{
+    RECT nameBox;
+    POINT chipPosition;
+};
+
+PlayerSeatLayout GetPlayerSeatLayout(int playerIndex, int playerCount, const RECT& tableRect)
 {
     int centerX = (tableRect.left + tableRect.right) / 2;
     int centerY = (tableRect.top + tableRect.bottom) / 2;
 
-    POINT positions[6] = {
-        { centerX - 45, tableRect.bottom - 205 },       // bottom / hero area
-        { tableRect.left + 85, centerY + 35 },          // left lower
-        { tableRect.left + 140, tableRect.top + 85 },   // top left
-        { centerX - 45, tableRect.top + 85 },           // top center
-        { tableRect.right - 200, tableRect.top + 85 },  // top right
-        { tableRect.right - 170, centerY + 35 }         // right lower
+    const int nameBoxWidth = 130;
+    const int nameBoxHeight = 32;
+
+    PlayerSeatLayout seats[6] = {
+        // 0: Hero / bottom center
+        {
+            { centerX - nameBoxWidth / 2, tableRect.bottom - 90, centerX + nameBoxWidth / 2, tableRect.bottom - 58 },
+            { centerX - 45, tableRect.bottom - 160 }
+        },
+
+        // 1: Bottom left
+        {
+            { tableRect.left + 45, tableRect.bottom - 145, tableRect.left + 45 + nameBoxWidth, tableRect.bottom - 113 },
+            { tableRect.left + 95, tableRect.bottom - 210 }
+        },
+
+        // 2: Top left
+        {
+            { tableRect.left + 80, tableRect.top + 45, tableRect.left + 80 + nameBoxWidth, tableRect.top + 77 },
+            { tableRect.left + 130, tableRect.top + 100 }
+        },
+
+        // 3: Top center
+        {
+            { centerX - nameBoxWidth / 2, tableRect.top + 35, centerX + nameBoxWidth / 2, tableRect.top + 67 },
+            { centerX - 45, tableRect.top + 95 }
+        },
+
+        // 4: Top right
+        {
+            { tableRect.right - 80 - nameBoxWidth, tableRect.top + 45, tableRect.right - 80, tableRect.top + 77 },
+            { tableRect.right - 200, tableRect.top + 100 }
+        },
+
+        // 5: Bottom right
+        {
+            { tableRect.right - 45 - nameBoxWidth, tableRect.bottom - 145, tableRect.right - 45, tableRect.bottom - 113 },
+            { tableRect.right - 190, tableRect.bottom - 210 }
+        }
     };
 
-    return positions[playerIndex % 6];
+    return seats[playerIndex % 6];
+}
+
+void DrawPlayerNameBox(HDC hdc, const RECT& nameBox, const std::wstring& playerName, int chipAmount)
+{
+    HBRUSH boxBrush = CreateSolidBrush(RGB(20, 65, 20));
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, boxBrush);
+
+    HPEN borderPen = CreatePen(PS_SOLID, 2, RGB(230, 230, 230));
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+
+    RoundRect(
+        hdc,
+        nameBox.left,
+        nameBox.top,
+        nameBox.right,
+        nameBox.bottom,
+        12,
+        12
+    );
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(boxBrush);
+    DeleteObject(borderPen);
+
+    SetBkMode(hdc, TRANSPARENT);
+    COLORREF oldColor = SetTextColor(hdc, RGB(255, 255, 255));
+
+    RECT nameTextRect = {
+        nameBox.left + 6,
+        nameBox.top + 2,
+        nameBox.right - 6,
+        nameBox.top + 17
+    };
+
+    DrawText(
+        hdc,
+        playerName.c_str(),
+        -1,
+        &nameTextRect,
+        DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS
+    );
+
+    wchar_t chipText[64];
+    wsprintf(chipText, L"%d chips", chipAmount);
+
+    RECT chipTextRect = {
+        nameBox.left + 6,
+        nameBox.top + 16,
+        nameBox.right - 6,
+        nameBox.bottom - 2
+    };
+
+    DrawText(
+        hdc,
+        chipText,
+        -1,
+        &chipTextRect,
+        DT_CENTER | DT_SINGLELINE | DT_VCENTER
+    );
+
+    SetTextColor(hdc, oldColor);
 }
 
 void DrawPlayerChipStacks(HDC hdc, Gdiplus::Graphics& graphics, const RECT& tableRect)
@@ -316,10 +419,8 @@ void DrawPlayerChipStacks(HDC hdc, Gdiplus::Graphics& graphics, const RECT& tabl
 
     int playerCount = (int)g_players.size();
 
-    if (playerCount == 0 && !g_heroCards.empty())
+    if (playerCount == 0)
     {
-        POINT heroChipPos = GetPlayerChipPosition(0, tableRect);
-        DrawChipStack(hdc, graphics, heroChipPos.x, heroChipPos.y, g_heroChips, L"You");
         return;
     }
 
@@ -327,8 +428,19 @@ void DrawPlayerChipStacks(HDC hdc, Gdiplus::Graphics& graphics, const RECT& tabl
 
     for (int i = 0; i < playersToDraw; ++i)
     {
-        POINT chipPos = GetPlayerChipPosition(i, tableRect);
-        DrawChipStack(hdc, graphics, chipPos.x, chipPos.y, GetPlayerChipAmount(i), g_players[i]);
+        int chipAmount = GetPlayerChipAmount(i);
+        PlayerSeatLayout seat = GetPlayerSeatLayout(i, playersToDraw, tableRect);
+
+        DrawPlayerNameBox(hdc, seat.nameBox, g_players[i], chipAmount);
+
+        DrawChipStack(
+            hdc,
+            graphics,
+            seat.chipPosition.x,
+            seat.chipPosition.y,
+            chipAmount,
+            L""
+        );
     }
 }
 
