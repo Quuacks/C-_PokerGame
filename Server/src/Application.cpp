@@ -82,11 +82,19 @@ void Application::HandlePlayerMessage(Player& player, const std::string& message
 }
 
 void Application::AddAuthenticatedPlayer(SOCKET socket, const std::string& username) {
-    Player newPlayer(socket, username);
+    auto newPlayer = std::make_shared<Player>(socket, username);
 
     m_Players.push_back(newPlayer);
 
     std::cout << "[Server] " << username << "has joined the server. Total players: " << m_Players.size() << "\n";
-    //send login confirm json packet to client
+    
+    m_Table.AddPlayer(newPlayer);
+
+    //Check how many players are currently
+}
+
+void Application::BroadcastGameState()
+{
+
 }
 

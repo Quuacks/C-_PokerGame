@@ -131,8 +131,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\game\GameTable.cpp" />
     <ClCompile Include="src\game\gameManager.cpp" />
     <ClCompile Include="src\game\deck.cpp" />
+    <ClCompile Include="src\game\GameStructures.h" />
     <ClCompile Include="src\game\handEvaluator.cpp" />
     <ClCompile Include="src\game\handEvaluator.h" />
     <ClCompile Include="src\messageHandlers\createGameRequestHandler.cpp" />
@@ -146,6 +148,7 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\game\GameTable.h" />
     <ClInclude Include="src\game\gameManager.h" />
     <ClInclude Include="src\game\deck.h" />
     <ClInclude Include="src\messageHandlers\createGameRequestHandler.h" />
