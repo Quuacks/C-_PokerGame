@@ -11,7 +11,7 @@
 #include <memory>
 #include <objidl.h>
 #include <gdiplus.h>
-#include <nlohmann/json.hpp>
+#include <json.hpp>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")

@@ -148,6 +148,7 @@
   <ItemGroup>
     <ClInclude Include="src\game\gameManager.h" />
     <ClInclude Include="src\game\deck.h" />
+    <ClInclude Include="src\game\gameState.h" />
     <ClInclude Include="src\messageHandlers\createGameRequestHandler.h" />
     <ClInclude Include="src\messageHandlers\joinGameRequestHandler.h" />
     <ClInclude Include="src\messageHandlers\playerActionRequestHandler.h" />

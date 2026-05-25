@@ -11,6 +11,8 @@
 #include <functional>
 #include <handler/requestHandler.h>
 #include <nlohmann/json.hpp>
+#include "game/gameState.h"
+#include "game/player.h"
 
 using json = nlohmann::json;
 
@@ -20,8 +22,9 @@ public:
     Application();
     void Start();
     void AddAuthenticatedPlayer(SOCKET socket, const std::string& username);
-
+    void BroadcastGameState();
 private:
+    GameState m_Game;         
     void MainLoop();
     void HandleRawMessage(SOCKET rawSocket, const std::string& message);
     void HandlePlayerMessage(Player& player, const std::string& message);
@@ -37,7 +40,7 @@ private:
 
     std::unordered_map<std::string, std::unique_ptr<requestHandler>> m_Handlers;
 
-    std::unordered_map<std::string, std::function<void(Application, SOCKET, const json&)>> m_RawHandlers;
+    std::unordered_map<std::string, std::function<void(Application&, SOCKET, const json&)>> m_RawHandlers;
 
     // Player routes map a string type to a function that takes a Player reference and JSON data
     std::unordered_map<std::string, std::function<void(Player&, const json&)>> m_PlayerHandlers;
