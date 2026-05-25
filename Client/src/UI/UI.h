@@ -17,6 +17,8 @@ struct GameState
     std::vector<Card> heroCards;
     int pot;
     std::vector<std::wstring> players;
+    std::vector<int> playerChips;
+    int heroChips = 1500;
     int selectedComboIndex;
 };
 
@@ -35,6 +37,10 @@ void UpdateUIFromGameState(HWND hWnd, const GameState& state);
 
 void AddStatusMessage(const std::wstring& message);
 void AddStatusMessageFromUtf8(const std::string& message);
+
+void StartGdiPlus();
+void ShutdownGdiPlus();
+void LoadChipAssets();
 
 void ShowRaiseControls(bool show);
 void UpdateRaiseAmountText();

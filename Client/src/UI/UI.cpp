@@ -7,9 +7,14 @@
 #include <unordered_map>
 #include <string>
 #include <cstdlib>
+#include <algorithm>
+#include <memory>
+#include <objidl.h>
+#include <gdiplus.h>
 #include <nlohmann/json.hpp>
 
 #pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "gdiplus.lib")
 
 using json = nlohmann::json;
 
@@ -36,14 +41,22 @@ HWND g_btnCancelRaise;
 HWND g_btnRaise, g_btnCall, g_btnCheck, g_btnFold;
 HWND g_comboHands, g_listPlayers;
 HWND g_statusLog;
+HWND g_mainHWnd = nullptr;
 
 const int MIN_RAISE = 0;
 const int MAX_RAISE = 10000; // Increased to match typical chip stacks
+const int DEFAULT_PLAYER_CHIPS = 1500;
+
 int g_potAmount = 0;
 std::vector<Card> g_boardCards;
 std::vector<Card> g_heroCards;
 std::vector<std::wstring> g_players;
+std::vector<int> g_playerChips;
+int g_heroChips = DEFAULT_PLAYER_CHIPS;
 int g_selectedComboIndex = 0;
+
+bool g_raiseControlsVisible = false;
+int g_raisePreviewAmount = 10;
 
 // SINGLE POINT OF CONTROL: Global pointer linking back to network engine
 NetworkClient* g_NetworkClient = nullptr;
@@ -60,6 +73,26 @@ int g_suitBase[4] = {
 
 const int CARD_BACK_INDEX = 28;
 
+ULONG_PTR g_gdiplusToken = 0;
+std::unique_ptr<Gdiplus::Image> g_chipSheet;
+
+const int CHIP_SPRITE_WIDTH = 64;
+const int CHIP_SPRITE_HEIGHT = 72;
+const int CHIP_SHEET_COLUMNS = 5;
+
+struct ChipDenomination
+{
+    int value;
+    int spriteIndex;
+};
+
+const ChipDenomination CHIP_DENOMS[] = {
+    {500, 0},
+    {100, 1},
+    {25, 2},
+    {5, 3},
+    {1, 4}
+};
 
 void SetNetworkClientForUI(NetworkClient* client) {
     g_NetworkClient = client;
@@ -112,6 +145,217 @@ void AddStatusMessage(const std::wstring& message)
     }
 
     SendMessage(g_statusLog, LB_SETTOPINDEX, count - 1, 0);
+}
+
+std::wstring ResolveExistingAssetPath(const std::vector<std::wstring>& candidates)
+{
+    for (const auto& candidate : candidates)
+    {
+        if (GetFileAttributesW(candidate.c_str()) != INVALID_FILE_ATTRIBUTES)
+            return candidate;
+    }
+
+    return candidates.empty() ? L"" : candidates.front();
+}
+
+void StartGdiPlus()
+{
+    if (g_gdiplusToken != 0)
+        return;
+
+    Gdiplus::GdiplusStartupInput startupInput;
+    Gdiplus::GdiplusStartup(&g_gdiplusToken, &startupInput, nullptr);
+}
+
+void ShutdownGdiPlus()
+{
+    g_chipSheet.reset();
+
+    if (g_gdiplusToken != 0)
+    {
+        Gdiplus::GdiplusShutdown(g_gdiplusToken);
+        g_gdiplusToken = 0;
+    }
+}
+
+void LoadChipAssets()
+{
+    std::wstring chipPath = ResolveExistingAssetPath({
+        L"src\\Textures\\Chips\\Top-Down\\Chips\\ChipsA_Flat-64x72.png",
+        L"..\\Client\\src\\Textures\\Chips\\Top-Down\\Chips\\ChipsA_Flat-64x72.png",
+        L"assets\\chips\\ChipsA_Flat-64x72.png"
+        });
+
+    g_chipSheet = std::make_unique<Gdiplus::Image>(chipPath.c_str());
+
+    if (g_chipSheet && g_chipSheet->GetLastStatus() == Gdiplus::Ok)
+        AddStatusMessage(L"Chip assets loaded.");
+    else
+        AddStatusMessage(L"Chip asset not found. Using fallback chip drawing.");
+}
+
+void EnsurePlayerChipDefaults()
+{
+    if (g_playerChips.size() < g_players.size())
+        g_playerChips.resize(g_players.size(), DEFAULT_PLAYER_CHIPS);
+}
+
+int GetPlayerChipAmount(int playerIndex)
+{
+    if (playerIndex >= 0 && playerIndex < (int)g_playerChips.size())
+        return g_playerChips[playerIndex];
+
+    return DEFAULT_PLAYER_CHIPS;
+}
+
+void DrawChipSprite(Gdiplus::Graphics& graphics, int x, int y, int width, int height, int spriteIndex)
+{
+    if (g_chipSheet && g_chipSheet->GetLastStatus() == Gdiplus::Ok)
+    {
+        int col = spriteIndex % CHIP_SHEET_COLUMNS;
+        int row = spriteIndex / CHIP_SHEET_COLUMNS;
+
+        graphics.DrawImage(
+            g_chipSheet.get(),
+            Gdiplus::Rect(x, y, width, height),
+            col * CHIP_SPRITE_WIDTH,
+            row * CHIP_SPRITE_HEIGHT,
+            CHIP_SPRITE_WIDTH,
+            CHIP_SPRITE_HEIGHT,
+            Gdiplus::UnitPixel
+        );
+
+        return;
+    }
+
+    Gdiplus::SolidBrush fallbackBrush(Gdiplus::Color(255, 220, 220, 220));
+    Gdiplus::Pen fallbackPen(Gdiplus::Color(255, 60, 60, 60), 2.0f);
+
+    graphics.FillEllipse(&fallbackBrush, x, y + height / 4, width, height / 2);
+    graphics.DrawEllipse(&fallbackPen, x, y + height / 4, width, height / 2);
+}
+
+void DrawChipStack(HDC hdc, Gdiplus::Graphics& graphics, int x, int y, int amount, const std::wstring& label)
+{
+    const int chipW = 34;
+    const int chipH = 38;
+    const int stackGap = 24;
+    const int chipVerticalOffset = 5;
+    const int maxChipsPerDenom = 5;
+
+    int remaining = (std::max)(0, amount);
+    int stackIndex = 0;
+
+    for (const auto& denom : CHIP_DENOMS)
+    {
+        if (remaining <= 0)
+            break;
+
+        int chipCount = remaining / denom.value;
+        remaining %= denom.value;
+
+        if (chipCount <= 0)
+            continue;
+
+        chipCount = (std::min)(chipCount, maxChipsPerDenom);
+
+        int stackX = x + stackIndex * stackGap;
+
+        for (int i = 0; i < chipCount; ++i)
+        {
+            int chipY = y - i * chipVerticalOffset;
+            DrawChipSprite(graphics, stackX, chipY, chipW, chipH, denom.spriteIndex);
+        }
+
+        stackIndex++;
+    }
+
+    if (amount <= 0)
+    {
+        DrawChipSprite(graphics, x, y, chipW, chipH, 4);
+    }
+
+    SetBkMode(hdc, TRANSPARENT);
+    COLORREF previousColor = SetTextColor(hdc, RGB(255, 255, 255));
+
+    wchar_t amountText[128];
+    wsprintf(amountText, L"%s: %d", label.c_str(), amount);
+
+    RECT textRect = {
+        x - 35,
+        y + chipH + 2,
+        x + 155,
+        y + chipH + 28
+    };
+
+    DrawText(hdc, amountText, -1, &textRect, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
+    SetTextColor(hdc, previousColor);
+}
+
+POINT GetPlayerChipPosition(int playerIndex, const RECT& tableRect)
+{
+    int centerX = (tableRect.left + tableRect.right) / 2;
+    int centerY = (tableRect.top + tableRect.bottom) / 2;
+
+    POINT positions[6] = {
+        { centerX - 45, tableRect.bottom - 205 },       // bottom / hero area
+        { tableRect.left + 85, centerY + 35 },          // left lower
+        { tableRect.left + 140, tableRect.top + 85 },   // top left
+        { centerX - 45, tableRect.top + 85 },           // top center
+        { tableRect.right - 200, tableRect.top + 85 },  // top right
+        { tableRect.right - 170, centerY + 35 }         // right lower
+    };
+
+    return positions[playerIndex % 6];
+}
+
+void DrawPlayerChipStacks(HDC hdc, Gdiplus::Graphics& graphics, const RECT& tableRect)
+{
+    EnsurePlayerChipDefaults();
+
+    int playerCount = (int)g_players.size();
+
+    if (playerCount == 0 && !g_heroCards.empty())
+    {
+        POINT heroChipPos = GetPlayerChipPosition(0, tableRect);
+        DrawChipStack(hdc, graphics, heroChipPos.x, heroChipPos.y, g_heroChips, L"You");
+        return;
+    }
+
+    int playersToDraw = (std::min)(playerCount, 6);
+
+    for (int i = 0; i < playersToDraw; ++i)
+    {
+        POINT chipPos = GetPlayerChipPosition(i, tableRect);
+        DrawChipStack(hdc, graphics, chipPos.x, chipPos.y, GetPlayerChipAmount(i), g_players[i]);
+    }
+}
+
+void DrawMainPot(HDC hdc, Gdiplus::Graphics& graphics, const RECT& tableRect)
+{
+    int centerX = (tableRect.left + tableRect.right) / 2;
+    int centerY = (tableRect.top + tableRect.bottom) / 2;
+
+    DrawChipStack(hdc, graphics, centerX - 55, centerY - 35, g_potAmount, L"Main Pot");
+}
+
+void DrawRaisePreview(HDC hdc, Gdiplus::Graphics& graphics)
+{
+    if (!g_raiseControlsVisible || !g_hSlider || !g_mainHWnd)
+        return;
+
+    RECT sliderRect;
+    GetWindowRect(g_hSlider, &sliderRect);
+    MapWindowPoints(nullptr, g_mainHWnd, (POINT*)&sliderRect, 2);
+
+    int previewX = sliderRect.left + ((sliderRect.right - sliderRect.left) / 2) - 45;
+    int previewY = sliderRect.top - 60;
+
+    if (previewY < 5)
+        previewY = sliderRect.bottom + 8;
+
+    DrawChipStack(hdc, graphics, previewX, previewY, g_raisePreviewAmount, L"Raise Preview");
 }
 
 void LoadCardAssets()
@@ -193,18 +437,30 @@ void AddStatusMessageFromUtf8(const std::string& message)
     AddStatusMessage(Utf8ToWide(message));
 }
 void ShowRaiseControls(bool show) {
+    g_raiseControlsVisible = show;
+
     int command = show ? SW_SHOW : SW_HIDE;
+
     ShowWindow(g_hSlider, command);
     ShowWindow(g_editRaiseAmount, command);
     ShowWindow(g_btnConfirmRaise, command);
     ShowWindow(g_btnCancelRaise, command);
+
+    if (g_mainHWnd)
+        InvalidateRect(g_mainHWnd, nullptr, TRUE);
 }
 
 void UpdateRaiseAmountText() {
     int amount = (int)SendMessage(g_hSlider, TBM_GETPOS, 0, 0);
+    g_raisePreviewAmount = amount;
+
     wchar_t buffer[32];
     wsprintf(buffer, L"%d", amount);
+
     SetWindowText(g_editRaiseAmount, buffer);
+
+    if (g_mainHWnd)
+        InvalidateRect(g_mainHWnd, nullptr, TRUE);
 }
 
 int GetRaiseAmountFromEdit() {
@@ -285,7 +541,11 @@ void UpdateUIFromGameState(HWND hWnd, const GameState& state) {
     g_heroCards = state.heroCards;
     g_potAmount = state.pot;
     g_players = state.players;
+    g_playerChips = state.playerChips;
+    g_heroChips = state.heroChips;
     g_selectedComboIndex = state.selectedComboIndex;
+
+    EnsurePlayerChipDefaults();
 
     SendMessage(g_comboHands, CB_SETCURSEL, g_selectedComboIndex, 0);
     SendMessage(g_listPlayers, LB_RESETCONTENT, 0, 0);
@@ -311,11 +571,18 @@ void DrawTable(HDC hdc, RECT rc) {
     FillRect(hdc, &center, tableBrush);
     DeleteObject(tableBrush);
 
+    Gdiplus::Graphics graphics(hdc);
+    graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+
     wchar_t potBuf[64];
     wsprintf(potBuf, L"Pot: %d", g_potAmount);
     SetBkMode(hdc, TRANSPARENT);
     RECT potRect = { (w / 2) - 100, rc.top + 10, (w / 2) + 100, rc.top + 40 };
     DrawText(hdc, potBuf, -1, &potRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    DrawPlayerChipStacks(hdc, graphics, center);
+    DrawMainPot(hdc, graphics, center);
+    DrawRaisePreview(hdc, graphics);
 
     int cardW = 60;
     int cardH = 90;
@@ -356,12 +623,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case ID_EDIT_RAISE_AMOUNT:
             if (HIWORD(wParam) == EN_CHANGE) {
                 int amount = GetRaiseAmountFromEdit();
+                g_raisePreviewAmount = amount;
                 SendMessage(g_hSlider, TBM_SETPOS, TRUE, amount);
+                InvalidateRect(hWnd, nullptr, TRUE);
             }
             break;
 
         case ID_BTN_CONFIRM_RAISE: {
             int raiseAmount = GetRaiseAmountFromEdit();
+            g_raisePreviewAmount = raiseAmount;
             ShowRaiseControls(false);
 
             wchar_t statusBuffer[128];
@@ -433,6 +703,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                  break;
 
     case WM_DESTROY:
+        ShutdownGdiPlus();
         PostQuitMessage(0);
         break;
     }
@@ -455,8 +726,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
         nullptr, nullptr, hInstance, nullptr);
     if (!hWnd) return FALSE;
 
-    g_btnRaise = CreateWindow(L"BUTTON", L"Raise", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_RAISE, hInst, nullptr);
-    g_btnCall = CreateWindow(L"BUTTON", L"Call", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CALL, hInst, nullptr);
+    g_mainHWnd = hWnd;
+    StartGdiPlus();
+
+    g_btnRaise = CreateWindow(L"BUTTON", L"Raise", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_RAISE, hInst, nullptr);    g_btnCall = CreateWindow(L"BUTTON", L"Call", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CALL, hInst, nullptr);
     g_btnCheck = CreateWindow(L"BUTTON", L"Check", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CHECK, hInst, nullptr);
     g_btnFold = CreateWindow(L"BUTTON", L"Fold", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_FOLD, hInst, nullptr);
 
@@ -510,6 +783,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
 
     ShowWindow(hWnd, nCmdShow);
     LoadCardAssets();
+    LoadChipAssets();
     UpdateWindow(hWnd);
 
     return TRUE;
