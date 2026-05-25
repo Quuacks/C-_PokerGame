@@ -2,10 +2,10 @@
 #include <vector>
 #include <string>
 
-struct Card {
-    int rank = 0;
-    int suit = 0;
-};
+//struct Card {
+//    int rank = 0;
+//    int suit = 0;
+//};
 
 struct GameState {
     int pot = 0;

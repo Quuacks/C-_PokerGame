@@ -53,15 +53,36 @@ bool NetworkManager::Initialize(int port)
     return true;
 }
 
-void NetworkManager::Update(std::vector<Player>& authenticatedPlayers,
+void NetworkManager::Update(std::vector<std::shared_ptr<Player>>& authenticatedPlayers,
             std::function<void(SOCKET, const std::string&)> rawCallback,
             std::function<void(Player&, const std::string&)> playerCallback) {
 
-    if (m_ListeningSocket == INVALID_SOCKET) return;
+    FD_ZERO(&m_ReadSet);
 
-    HandleNewConnections();
-    PollRawSockets(rawCallback);
-    PollAuthenticatedPlayers(authenticatedPlayers, playerCallback);
+    FD_SET(m_ListeningSocket, &m_ReadSet);
+
+    for (const auto& playerPtr : authenticatedPlayers) {
+        if (playerPtr) {
+            FD_SET(playerPtr->getSocket(), &m_ReadSet);
+        }
+    }
+
+    timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 10000;
+
+    int activity = select(0, &m_ReadSet, nullptr, nullptr, &timeout);
+
+    if (activity == SOCKET_ERROR) {
+        std::cout << "[NETWORK ERROR] Select failed: " << WSAGetLastError() << "\n";
+        return;
+    }
+
+    if (activity > 0) {
+        PollRawSockets(rawCallback);
+
+        PollAuthenticatedPlayers(authenticatedPlayers, playerCallback);
+    }
 }
 
 void NetworkManager::HandleNewConnections() {
@@ -80,57 +101,45 @@ void NetworkManager::HandleNewConnections() {
     }
 }
 void NetworkManager::PollRawSockets(std::function<void(SOCKET, const std::string&)> rawCallback) {
-    char buf[4096];
-    bool socketTransitioned = false;
-    for (int i = m_RawSockets.size() - 1; i >= 0; --i) {
-        SOCKET sock = m_RawSockets[i];
-        if (sock == INVALID_SOCKET)
-            continue;
+    if (FD_ISSET(m_ListeningSocket, &m_ReadSet)) {
+        sockaddr_in clientAddr;
+        int addrLen = sizeof(clientAddr);
 
-        ZeroMemory(buf, 4096);
-        int bytesReceived = recv(sock, buf, 4096, 0);
+        SOCKET newClientSocket = accept(m_ListeningSocket, (sockaddr*)&clientAddr, &addrLen);
+        if (newClientSocket != INVALID_SOCKET) {
+            std::cout << "[NETWORK] Raw client connection accepted on socket: " << newClientSocket << "\n";
 
-        if (bytesReceived > 0) {
-            rawCallback(sock, std::string(buf, bytesReceived));
-            socketTransitioned = true;
-            break;
-        }
-        else if (bytesReceived == 0) {
-            std::cout << "[NET] Unauthenticated Client closed connection.\n";
-            closesocket(sock);
-            m_RawSockets[i] = INVALID_SOCKET;
-        }
-        else {
-            int err = WSAGetLastError();
-            if (err != WSAEWOULDBLOCK) {
-                // Forceful window close (WSAECONNRESET)
-                std::cout << "[NET] Unauthenticated Client forcefully disconnected (Error " << err << ").\n";
-                closesocket(sock);
-                m_RawSockets[i] = INVALID_SOCKET;
-            }
+            //Listen for Login payload
         }
     }
 }
 
-void NetworkManager::PollAuthenticatedPlayers(std::vector<Player>& authenticatedPlayers,
-    std::function<void(Player&, const std::string&)> playerCallback) {
+void NetworkManager::PollAuthenticatedPlayers(
+    std::vector<std::shared_ptr<Player>>& players,
+    std::function<void(Player&, const std::string&)> handler)
+{
+    for (auto it = players.begin(); it != players.end(); ) {
+        auto& playerPtr = *it;
+        SOCKET clientSocket = playerPtr->getSocket();
 
-    char buf[4096];
-    for (int i = authenticatedPlayers.size() - 1; i >= 0; --i) {
-        Player& player = authenticatedPlayers[i];
-        SOCKET sock = player.getSocket();
+        // Use the passed-in readSet variable directly!
+        if (FD_ISSET(clientSocket, &m_ReadSet)) {
+            char buffer[4096];
+            int bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
-        ZeroMemory(buf, 4096);
-        int bytesReceived = recv(sock, buf, 4096, 0);
-
-        if (bytesReceived > 0) {
-            playerCallback(player, std::string(buf, bytesReceived));
+            if (bytesReceived <= 0) {
+                std::cout << "[NETWORK] Player disconnected: " << playerPtr->GetUsername() << "\n";
+                closesocket(clientSocket);
+                it = players.erase(it);
+                continue;
+            }
+            else {
+                buffer[bytesReceived] = '\0';
+                std::string message(buffer);
+                handler(*playerPtr, message);
+            }
         }
-        else if (bytesReceived == 0 || (bytesReceived == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
-            std::cout << "[NET] Player '" << player.GetUsername() << "' disconnected.\n";
-            closesocket(sock);
-            authenticatedPlayers.erase(authenticatedPlayers.begin() + i); // Single source of truth removal!
-        }
+        ++it;
     }
 }
 

@@ -97,39 +97,32 @@ void Application::AddAuthenticatedPlayer(SOCKET socket, const std::string& usern
 
 void Application::BroadcastGameState()
 {
+    //json packet;
+    //packet["type"] = "GAME_STATE";
 
+    //// Build data object explicitly because Card is a custom struct
+    //json data;
+    //data["pot"] = m_Game.pot;
+
+    //data["boardCards"] = json::array();
+    //for (const auto& c : m_Game.boardCards) {
+    //    data["boardCards"].push_back({ {"rank", c.rank}, {"suit", c.suit} });
+    //}
+
+    //data["heroCards"] = json::array();
+    //for (const auto& c : m_Game.heroCards) {
+    //    data["heroCards"].push_back({ {"rank", c.rank}, {"suit", c.suit} });
+    //}
+
+    //data["players"] = m_Game.playerNames;
+    //data["playerChips"] = m_Game.playerChips;
+    //data["heroChips"] = m_Game.heroChips;
+    //data["selectedComboIndex"] = m_Game.selectedComboIndex;
+
+    //packet["data"] = data;
+
+    //std::string msg = packet.dump() + "\n";
+
+    //for (auto& p : m_Players)
+    //    send(p->getSocket(), msg.c_str(), static_cast<int>(msg.size()), 0);
 }
-void Application::BroadcastGameState()
-{
-    json packet;
-    packet["type"] = "GAME_STATE";
-
-    // Build data object explicitly because Card is a custom struct
-    json data = json::object();
-    data["pot"] = m_Game.pot;
-
-    data["boardCards"] = json::array();
-    for (const auto& c : m_Game.boardCards) {
-        data["boardCards"].push_back({ {"rank", c.rank}, {"suit", c.suit} });
-    }
-
-    data["heroCards"] = json::array();
-    for (const auto& c : m_Game.heroCards) {
-        data["heroCards"].push_back({ {"rank", c.rank}, {"suit", c.suit} });
-    }
-
-    data["players"] = m_Game.playerNames;
-    data["playerChips"] = m_Game.playerChips;
-    data["heroChips"] = m_Game.heroChips;
-    data["selectedComboIndex"] = m_Game.selectedComboIndex;
-
-    packet["data"] = data;
-
-    std::string msg = packet.dump() + "\n";
-
-    for (auto& p : m_Players)
-        send(p->getSocket(), msg.c_str(), static_cast<int>(msg.size()), 0);
-}
-
-
-

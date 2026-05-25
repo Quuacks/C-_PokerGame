@@ -11,6 +11,7 @@
 #include <functional>
 #include <handler/requestHandler.h>
 #include <nlohmann/json.hpp>
+#include <game/GameTable.h>
 #include "game/gameState.h"
 #include "game/player.h"
 
