@@ -23,5 +23,7 @@ class NetworkClient
     private:
         SOCKET m_Socket;
         bool m_isConnected;
+        std::string m_recvBuffer;
+
 };
 

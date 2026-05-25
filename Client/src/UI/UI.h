@@ -3,30 +3,16 @@
 #include <windows.h>
 #include <vector>
 #include <string>
+#include "../GameState.h"
 
-// 2. Core UI Data Structures
-struct Card
-{
-    int rank;
-    int suit;
-};
-
-struct GameState
-{
-    std::vector<Card> boardCards;
-    std::vector<Card> heroCards;
-    int pot;
-    std::vector<std::wstring> players;
-    std::vector<int> playerChips;
-    int heroChips = 1500;
-    int selectedComboIndex;
-};
 
 class NetworkClient;
 
 // 3. The Network Bridge Function (The line causing your error)
 void SetNetworkClientForUI(NetworkClient* client);
+void UpdateUIFromGameState(HWND hWnd, const GameState& state);
 
+std::wstring Utf8ToWide(const std::string& text);
 // 4. Core Win32 Setup Functions
 ATOM MyRegisterClass(HINSTANCE hInstance);
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow);

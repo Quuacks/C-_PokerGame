@@ -11,7 +11,8 @@
 #include <functional>
 #include <handler/requestHandler.h>
 #include <nlohmann/json.hpp>
-#include "game/GameTable.h"
+#include "game/gameState.h"
+#include "game/player.h"
 
 using json = nlohmann::json;
 
@@ -28,6 +29,7 @@ public:
     void BroadcastGameState();
 
 private:
+    GameState m_Game;         
     void MainLoop();
     void HandleRawMessage(SOCKET rawSocket, const std::string& message);
     void HandlePlayerMessage(Player& player, const std::string& message);

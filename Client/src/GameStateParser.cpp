@@ -1,0 +1,28 @@
+#include "GameState.h"
+#include "UI/UI.h"
+#include <json.hpp>
+
+using json = nlohmann::json;
+
+GameState ParseGameState(const json& data)
+{
+    GameState state;
+
+    state.pot = data.value("pot", 0);
+    state.selectedComboIndex = data.value("selectedComboIndex", 0);
+    state.heroChips = data.value("heroChips", 1500);
+
+    for (auto& p : data["players"])
+        state.players.push_back(Utf8ToWide(p.get<std::string>()));
+
+    for (auto& c : data["boardCards"])
+        state.boardCards.push_back({ c["rank"], c["suit"] });
+
+    for (auto& c : data["heroCards"])
+        state.heroCards.push_back({ c["rank"], c["suit"] });
+
+    for (auto& chips : data["playerChips"])
+        state.playerChips.push_back(chips.get<int>());
+
+    return state;
+}

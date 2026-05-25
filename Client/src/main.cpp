@@ -7,7 +7,9 @@
 #include <chrono>
 #include <string>
 #include <commctrl.h>
-#include <nlohmann/json.hpp>
+#include <json.hpp>
+#include "GameState.h"
+#include "GameStateParser.h"
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "comctl32.lib")
@@ -82,8 +84,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         // Handle incoming asynchronous network data updates from the server
         client.Update([mainHWnd](const std::string& rawServerMessage) {
             try {
-                // You can reuse your json parsing logic right here to process table states!
-                std::cout << "[NET] Received payload: " << rawServerMessage << "\n";
+                json packet = json::parse(rawServerMessage);
+
+                if (packet["type"] == "GAME_STATE") {
+                    GameState state = ParseGameState(packet["data"]);
+                    UpdateUIFromGameState(mainHWnd, state);
+                }
 
                 AddStatusMessageFromUtf8("[Server] " + rawServerMessage);
             }
@@ -91,6 +97,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 AddStatusMessage(L"Failed to process server message.");
             }
             });
+
         Sleep(10); // Throttle loop to manage CPU consumption
     }
 
