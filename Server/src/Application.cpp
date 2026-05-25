@@ -128,7 +128,7 @@ void Application::BroadcastGameState()
     std::string msg = packet.dump() + "\n";
 
     for (auto& p : m_Players)
-        send(p.getSocket(), msg.c_str(), static_cast<int>(msg.size()), 0);
+        send(p->getSocket(), msg.c_str(), static_cast<int>(msg.size()), 0);
 }
 
 

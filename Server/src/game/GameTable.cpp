@@ -43,6 +43,24 @@ void GameTable::AdvanceBettingRound()
             m_Deck.pop_back();
         }
     }
+    else if (m_Round == BettingRound::FLOP) {
+        m_Round = BettingRound::TURN;
+        std::cout << "Moving To Turn\n";
+        m_CommunityCards.push_back(m_Deck.back());
+        m_Deck.pop_back();
+    }
+    else if (m_Round == BettingRound::TURN) {
+        m_Round = BettingRound::RIVER;
+        std::cout << "Moving to river";
+        m_CommunityCards.push_back(m_Deck.back());
+        m_Deck.pop_back();
+    }
+    else if (m_Round == BettingRound::RIVER) {
+        m_Round = BettingRound::SHOWDOWN;
+        std::cout << "Moving to Showdown";
+        EvaluateShowdown();
+        StartNewHand();
+    }
 
 }
 
@@ -81,5 +99,80 @@ void GameTable::ProcessPlayerAction(SOCKET socket, const std::string& actionType
         else {
             MoveTurnToNextActivePlayer();
         }
+    }
+}
+
+void GameTable::BuildDeck()
+{
+    m_Deck.clear();
+    for (int suit = 0; suit < 4; ++suit) {
+        for (int rank = 2; rank <= 14; ++rank) {
+            ServerCard card;
+            card.rank = rank;
+            card.suit = suit;
+            m_Deck.push_back(card);
+        }
+    }
+}
+
+void GameTable::ShuffleDeck()
+{
+    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::shuffle(m_Deck.begin(), m_Deck.end(), std::default_random_engine(seed));
+}
+
+void GameTable::DealCards()
+{
+    std::cout << "Dealing cards to players\n";
+
+    for (int i = 0; i < 2; ++i) {
+        for (auto& player : m_Players) {
+            if (m_Deck.empty())
+                return;
+            ServerCard topCard = m_Deck.back();
+            m_Deck.pop_back();
+            //Add card to player
+        }
+    }
+}
+
+void GameTable::CollectBlinds()
+{
+    if (m_Players.size() < 2)
+        return;
+    std::cout << "[Table] Collecting small and big blind";
+    //add -chips to players
+    m_Pot += SMALL_BLIND + BIG_BLIND;
+    m_CurrentBet = BIG_BLIND;
+}
+
+void GameTable::MoveTurnToNextActivePlayer()
+{
+    if (m_Players.empty())
+        return;
+
+    m_CurrentTurnIdx = (m_CurrentTurnIdx + 1) % m_Players.size();
+
+    //Skip players who have folded.
+    std::cout << "Next turn is player index: " << m_CurrentTurnIdx << "\n";
+}
+
+bool GameTable::IsBettingRoundComplete()
+{
+    static int actionsThisRound = 0;
+    actionsThisRound++;
+    if (actionsThisRound >= m_Players.size()) {
+        actionsThisRound = 0;
+        return true;
+    }
+    return false;
+}
+
+void GameTable::EvaluateShowdown()
+{
+    std::cout << "Evaluating Hands and distributing Pot: " << m_Pot << "\n";
+    //Placeholder logic for now
+    if (!m_Players.empty()) {
+        //m_Players[0]->AddChips(m_Pot);
     }
 }

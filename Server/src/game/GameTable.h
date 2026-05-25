@@ -40,5 +40,8 @@ class GameTable
         void AdvanceBettingRound();
         void ProcessPlayerAction(SOCKET socket, const std::string& actionType, int amount = 0);
 
+        int SMALL_BLIND = 10;
+        int BIG_BLIND = 20;
+
 };
 
