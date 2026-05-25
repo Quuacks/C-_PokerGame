@@ -24,6 +24,7 @@ using json = nlohmann::json;
 
 #define ID_COMBO_HAND         3001
 #define ID_LIST_PLAYERS       3002
+#define ID_STATUS_LOG         3003
 
 // Global handles required for Win32 callbacks
 HINSTANCE hInst;
@@ -33,6 +34,7 @@ HWND g_btnConfirmRaise;
 HWND g_btnCancelRaise;
 HWND g_btnRaise, g_btnCall, g_btnCheck, g_btnFold;
 HWND g_comboHands, g_listPlayers;
+HWND g_statusLog;
 
 const int MIN_RAISE = 0;
 const int MAX_RAISE = 10000; // Increased to match typical chip stacks
@@ -49,6 +51,59 @@ void SetNetworkClientForUI(NetworkClient* client) {
     g_NetworkClient = client;
 }
 
+std::wstring Utf8ToWide(const std::string& text)
+{
+    if (text.empty())
+        return L"";
+
+    int sizeNeeded = MultiByteToWideChar(
+        CP_UTF8,
+        0,
+        text.c_str(),
+        (int)text.size(),
+        nullptr,
+        0
+    );
+
+    if (sizeNeeded <= 0)
+        return std::wstring(text.begin(), text.end());
+
+    std::wstring result(sizeNeeded, L'\0');
+
+    MultiByteToWideChar(
+        CP_UTF8,
+        0,
+        text.c_str(),
+        (int)text.size(),
+        &result[0],
+        sizeNeeded
+    );
+
+    return result;
+}
+
+void AddStatusMessage(const std::wstring& message)
+{
+    if (!g_statusLog)
+        return;
+
+    SendMessage(g_statusLog, LB_ADDSTRING, 0, (LPARAM)message.c_str());
+
+    int count = (int)SendMessage(g_statusLog, LB_GETCOUNT, 0, 0);
+
+    if (count > 100)
+    {
+        SendMessage(g_statusLog, LB_DELETESTRING, 0, 0);
+        count--;
+    }
+
+    SendMessage(g_statusLog, LB_SETTOPINDEX, count - 1, 0);
+}
+
+void AddStatusMessageFromUtf8(const std::string& message)
+{
+    AddStatusMessage(Utf8ToWide(message));
+}
 void ShowRaiseControls(bool show) {
     int command = show ? SW_SHOW : SW_HIDE;
     ShowWindow(g_hSlider, command);
@@ -99,7 +154,30 @@ void PositionControls(HWND hWnd) {
     MoveWindow(g_btnCancelRaise, margin + btnWidth * 2 + 155, raiseY, 70, 25, TRUE);
 
     MoveWindow(g_comboHands, margin, margin, sideWidth - 2 * margin, 200, TRUE);
-    MoveWindow(g_listPlayers, w - sideWidth + margin, margin, sideWidth - 2 * margin, h - 2 * margin - bottomHeight, TRUE);
+
+    int statusTop = margin + 220;
+    int statusHeight = h - bottomHeight - statusTop - margin;
+
+    if (statusHeight < 80)
+        statusHeight = 80;
+
+    MoveWindow(
+        g_statusLog,
+        margin,
+        statusTop,
+        sideWidth - 2 * margin,
+        statusHeight,
+        TRUE
+    );
+
+    MoveWindow(
+        g_listPlayers,
+        w - sideWidth + margin,
+        margin,
+        sideWidth - 2 * margin,
+        h - 2 * margin - bottomHeight,
+        TRUE
+    );
 }
 
 void FillHandsCombo() {
@@ -203,6 +281,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case ID_BTN_RAISE:
             ShowRaiseControls(true);
             UpdateRaiseAmountText();
+            AddStatusMessage(L"Raise selected. Choose an amount.");
             break;
 
         case ID_EDIT_RAISE_AMOUNT:
@@ -215,6 +294,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case ID_BTN_CONFIRM_RAISE: {
             int raiseAmount = GetRaiseAmountFromEdit();
             ShowRaiseControls(false);
+
+            wchar_t statusBuffer[128];
+            wsprintf(statusBuffer, L"Raise amount selected: %d", raiseAmount);
+            AddStatusMessage(statusBuffer);
 
             // NETWORK LINK: Fire structural RAISE request
             if (g_NetworkClient) {
@@ -229,10 +312,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case ID_BTN_CANCEL_RAISE:
             ShowRaiseControls(false);
+            AddStatusMessage(L"Raise cancelled.");
             break;
 
         case ID_BTN_CALL:
             ShowRaiseControls(false);
+            AddStatusMessage(L"Call selected.");
+
             if (g_NetworkClient) {
                 json packet = { {"type", "CALL"}, {"data", json::object()} };
                 //g_NetworkClient->SendRequest(packet.dump() + "\n");
@@ -241,6 +327,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case ID_BTN_CHECK:
             ShowRaiseControls(false);
+            AddStatusMessage(L"Check selected.");
+
             if (g_NetworkClient) {
                 json packet = { {"type", "CHECK"}, {"data", json::object()} };
                 //g_NetworkClient->SendRequest(packet.dump() + "\n");
@@ -249,6 +337,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case ID_BTN_FOLD:
             ShowRaiseControls(false);
+            AddStatusMessage(L"Fold selected.");
+
             if (g_NetworkClient) {
                 json packet = { {"type", "FOLD"}, {"data", json::object()} };
                 //g_NetworkClient->SendRequest(packet.dump() + "\n");
@@ -311,11 +401,44 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
 
     ShowRaiseControls(false);
 
-    g_comboHands = CreateWindow(WC_COMBOBOX, L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, 0, 0, 0, 0, hWnd, (HMENU)ID_COMBO_HAND, hInst, nullptr);
-    g_listPlayers = CreateWindow(WC_LISTBOX, L"", WS_CHILD | WS_VISIBLE | LBS_NOTIFY, 0, 0, 0, 0, hWnd, (HMENU)ID_LIST_PLAYERS, hInst, nullptr);
+    g_comboHands = CreateWindow(
+        WC_COMBOBOX,
+        L"",
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_COMBO_HAND,
+        hInst,
+        nullptr
+    );
 
+    g_statusLog = CreateWindow(
+        WC_LISTBOX,
+        L"",
+        WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | LBS_NOTIFY,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_STATUS_LOG,
+        hInst,
+        nullptr
+    );
+
+    g_listPlayers = CreateWindow(
+        WC_LISTBOX,
+        L"",
+        WS_CHILD | WS_VISIBLE | LBS_NOTIFY,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_LIST_PLAYERS,
+        hInst,
+        nullptr
+    );
     FillHandsCombo();
     PositionControls(hWnd);
+
+    AddStatusMessage(L"UI started.");
+    AddStatusMessage(L"Waiting for server messages...");
+
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
 

@@ -64,6 +64,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Capture the primary window handle for refreshing graphics
     HWND mainHWnd = FindWindowW(L"PokerUI", L"Poker Game");
 
+    AddStatusMessage(L"Connected to server.");
+    AddStatusMessage(L"Login request sent.");
+    AddStatusMessage(L"Client is ready.");
+
     std::cout << "[CLIENT] Entering unified core engine loop...\n";
 
     // 7. Core Non-Blocking Unified Message & Network Loop
@@ -80,10 +84,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             try {
                 // You can reuse your json parsing logic right here to process table states!
                 std::cout << "[NET] Received payload: " << rawServerMessage << "\n";
-            }
-            catch (...) {}
-            });
 
+                AddStatusMessageFromUtf8("[Server] " + rawServerMessage);
+            }
+            catch (...) {
+                AddStatusMessage(L"Failed to process server message.");
+            }
+            });
         Sleep(10); // Throttle loop to manage CPU consumption
     }
 

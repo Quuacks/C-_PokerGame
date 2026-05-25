@@ -32,6 +32,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // 5. UI Mutator & Rendering Functions
 void UpdateUIFromGameState(HWND hWnd, const GameState& state);
+
+void AddStatusMessage(const std::wstring& message);
+void AddStatusMessageFromUtf8(const std::string& message);
+
 void ShowRaiseControls(bool show);
 void UpdateRaiseAmountText();
 int GetRaiseAmountFromEdit();
