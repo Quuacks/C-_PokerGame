@@ -32,6 +32,8 @@ using json = nlohmann::json;
 #define ID_LIST_PLAYERS       3002
 #define ID_STATUS_LOG         3003
 
+#define ID_TIMER_TURN_POPUP   4001
+
 // Global handles required for Win32 callbacks
 HINSTANCE hInst;
 HWND g_hSlider;
@@ -41,6 +43,10 @@ HWND g_btnCancelRaise;
 HWND g_btnRaise, g_btnCall, g_btnCheck, g_btnFold;
 HWND g_comboHands, g_listPlayers;
 HWND g_statusLog;
+
+bool g_isHeroTurn = false;
+bool g_showTurnPopup = false;
+
 HWND g_mainHWnd = nullptr;
 
 const int MIN_RAISE = 0;
@@ -145,6 +151,243 @@ void AddStatusMessage(const std::wstring& message)
     }
 
     SendMessage(g_statusLog, LB_SETTOPINDEX, count - 1, 0);
+}
+
+bool IsActionButtonId(int controlId)
+{
+    return controlId == ID_BTN_RAISE ||
+        controlId == ID_BTN_CALL ||
+        controlId == ID_BTN_CHECK ||
+        controlId == ID_BTN_FOLD;
+}
+
+void RefreshActionButtons()
+{
+    HWND buttons[] = {
+        g_btnRaise,
+        g_btnCall,
+        g_btnCheck,
+        g_btnFold
+    };
+
+    for (HWND button : buttons)
+    {
+        if (button)
+            InvalidateRect(button, nullptr, TRUE);
+    }
+
+    if (g_mainHWnd)
+        InvalidateRect(g_mainHWnd, nullptr, TRUE);
+}
+
+void ShowYourTurnPopup()
+{
+    if (!g_mainHWnd)
+        return;
+
+    g_showTurnPopup = true;
+
+    SetTimer(
+        g_mainHWnd,
+        ID_TIMER_TURN_POPUP,
+        3000,
+        nullptr
+    );
+
+    AddStatusMessage(L"Your turn.");
+    InvalidateRect(g_mainHWnd, nullptr, TRUE);
+}
+
+void SetHeroTurn(bool isHeroTurn)
+{
+    g_isHeroTurn = isHeroTurn;
+
+    if (g_isHeroTurn)
+    {
+        ShowYourTurnPopup();
+    }
+    else
+    {
+        g_showTurnPopup = false;
+
+        if (g_mainHWnd)
+            KillTimer(g_mainHWnd, ID_TIMER_TURN_POPUP);
+    }
+
+    RefreshActionButtons();
+}
+
+void DrawTurnPopup(HDC hdc, const RECT& clientRect)
+{
+    if (!g_showTurnPopup)
+        return;
+
+    const int boxWidth = 300;
+    const int boxHeight = 70;
+
+    int centerX = (clientRect.left + clientRect.right) / 2;
+
+    RECT boxRect = {
+        centerX - boxWidth / 2,
+        clientRect.top + 70,
+        centerX + boxWidth / 2,
+        clientRect.top + 70 + boxHeight
+    };
+
+    HBRUSH popupBrush = CreateSolidBrush(RGB(255, 215, 80));
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, popupBrush);
+
+    HPEN borderPen = CreatePen(PS_SOLID, 3, RGB(120, 80, 0));
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+
+    RoundRect(
+        hdc,
+        boxRect.left,
+        boxRect.top,
+        boxRect.right,
+        boxRect.bottom,
+        18,
+        18
+    );
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(popupBrush);
+    DeleteObject(borderPen);
+
+    SetBkMode(hdc, TRANSPARENT);
+
+    HFONT popupFont = CreateFontW(
+        30,
+        0,
+        0,
+        0,
+        FW_BOLD,
+        FALSE,
+        FALSE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY,
+        DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI"
+    );
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, popupFont);
+    COLORREF oldTextColor = SetTextColor(hdc, RGB(20, 20, 20));
+
+    DrawText(
+        hdc,
+        L"YOUR TURN",
+        -1,
+        &boxRect,
+        DT_CENTER | DT_VCENTER | DT_SINGLELINE
+    );
+
+    SetTextColor(hdc, oldTextColor);
+    SelectObject(hdc, oldFont);
+    DeleteObject(popupFont);
+}
+
+void DrawActionButton(const DRAWITEMSTRUCT* drawInfo)
+{
+    if (!drawInfo)
+        return;
+
+    HDC hdc = drawInfo->hDC;
+    RECT rc = drawInfo->rcItem;
+
+    bool pressed = (drawInfo->itemState & ODS_SELECTED) != 0;
+    bool focused = (drawInfo->itemState & ODS_FOCUS) != 0;
+
+    COLORREF backgroundColor;
+    COLORREF borderColor;
+    COLORREF textColor;
+
+    if (g_isHeroTurn)
+    {
+        backgroundColor = pressed ? RGB(220, 170, 40) : RGB(255, 210, 70);
+        borderColor = RGB(130, 90, 0);
+        textColor = RGB(20, 20, 20);
+    }
+    else
+    {
+        backgroundColor = pressed ? RGB(190, 190, 190) : RGB(235, 235, 235);
+        borderColor = RGB(120, 120, 120);
+        textColor = RGB(0, 0, 0);
+    }
+
+    HBRUSH buttonBrush = CreateSolidBrush(backgroundColor);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, buttonBrush);
+
+    HPEN borderPen = CreatePen(
+        PS_SOLID,
+        g_isHeroTurn ? 3 : 1,
+        borderColor
+    );
+
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+
+    RoundRect(
+        hdc,
+        rc.left,
+        rc.top,
+        rc.right,
+        rc.bottom,
+        12,
+        12
+    );
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(buttonBrush);
+    DeleteObject(borderPen);
+
+    wchar_t text[64];
+    GetWindowTextW(drawInfo->hwndItem, text, 64);
+
+    SetBkMode(hdc, TRANSPARENT);
+    COLORREF oldTextColor = SetTextColor(hdc, textColor);
+
+    HFONT buttonFont = CreateFontW(
+        20,
+        0,
+        0,
+        0,
+        g_isHeroTurn ? FW_BOLD : FW_NORMAL,
+        FALSE,
+        FALSE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY,
+        DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI"
+    );
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, buttonFont);
+
+    DrawText(
+        hdc,
+        text,
+        -1,
+        &rc,
+        DT_CENTER | DT_VCENTER | DT_SINGLELINE
+    );
+
+    if (focused)
+    {
+        RECT focusRect = rc;
+        InflateRect(&focusRect, -5, -5);
+        DrawFocusRect(hdc, &focusRect);
+    }
+
+    SelectObject(hdc, oldFont);
+    DeleteObject(buttonFont);
+
+    SetTextColor(hdc, oldTextColor);
 }
 
 std::wstring ResolveExistingAssetPath(const std::vector<std::wstring>& candidates)
@@ -724,6 +967,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PositionControls(hWnd);
         break;
 
+    case WM_KEYDOWN:
+        if (wParam == 'T')
+        {
+            SetHeroTurn(!g_isHeroTurn);
+        }
+        break;
+
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case ID_BTN_RAISE:
@@ -804,24 +1054,53 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
 
+    case WM_DRAWITEM:
+    {
+        int controlId = (int)wParam;
+
+        if (IsActionButtonId(controlId))
+        {
+            DrawActionButton((DRAWITEMSTRUCT*)lParam);
+            return TRUE;
+        }
+
+        break;
+    }
+
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
         RECT rc;
         GetClientRect(hWnd, &rc);
+
         DrawTable(hdc, rc);
+        DrawTurnPopup(hdc, rc);
+
         EndPaint(hWnd, &ps);
     }
                  break;
+    case WM_TIMER:
+        if (wParam == ID_TIMER_TURN_POPUP)
+        {
+            KillTimer(hWnd, ID_TIMER_TURN_POPUP);
+            g_showTurnPopup = false;
+            InvalidateRect(hWnd, nullptr, TRUE);
+            return 0;
+        }
+        break;
 
     case WM_DESTROY:
+        KillTimer(hWnd, ID_TIMER_TURN_POPUP);
         ShutdownGdiPlus();
         PostQuitMessage(0);
         break;
-    }
-    return DefWindowProc(hWnd, msg, wParam, lParam);
-}
 
+    default:
+        return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+
+    return 0;
+}
 ATOM MyRegisterClass(HINSTANCE hInstance) {
     WNDCLASSEXW wcex = { sizeof(WNDCLASSEX) };
     wcex.lpfnWndProc = WndProc;
@@ -841,11 +1120,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     g_mainHWnd = hWnd;
     StartGdiPlus();
 
-    g_btnRaise = CreateWindow(L"BUTTON", L"Raise", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_RAISE, hInst, nullptr);    g_btnCall = CreateWindow(L"BUTTON", L"Call", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CALL, hInst, nullptr);
-    g_btnCheck = CreateWindow(L"BUTTON", L"Check", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CHECK, hInst, nullptr);
-    g_btnFold = CreateWindow(L"BUTTON", L"Fold", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_FOLD, hInst, nullptr);
+    g_btnRaise = CreateWindow(L"BUTTON", L"Raise", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_RAISE, hInst, nullptr);
+    g_btnCall = CreateWindow(L"BUTTON", L"Call", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CALL, hInst, nullptr);
+    g_btnCheck = CreateWindow(L"BUTTON", L"Check", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CHECK, hInst, nullptr);
+    g_btnFold = CreateWindow(L"BUTTON", L"Fold", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_FOLD, hInst, nullptr);    g_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, L"", WS_CHILD | TBS_AUTOTICKS, 0, 0, 0, 0, hWnd, (HMENU)ID_SLIDER, hInst, nullptr);
 
-    g_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, L"", WS_CHILD | TBS_AUTOTICKS, 0, 0, 0, 0, hWnd, (HMENU)ID_SLIDER, hInst, nullptr);
     SendMessage(g_hSlider, TBM_SETRANGE, TRUE, MAKELPARAM(MIN_RAISE, MAX_RAISE));
     SendMessage(g_hSlider, TBM_SETPOS, TRUE, 10);
 

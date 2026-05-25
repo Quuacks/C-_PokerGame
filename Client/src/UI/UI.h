@@ -42,6 +42,8 @@ void StartGdiPlus();
 void ShutdownGdiPlus();
 void LoadChipAssets();
 
+void SetHeroTurn(bool isHeroTurn);
+
 void ShowRaiseControls(bool show);
 void UpdateRaiseAmountText();
 int GetRaiseAmountFromEdit();
