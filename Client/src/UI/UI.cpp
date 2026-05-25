@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <vector>
+#include <unordered_map>
 #include <string>
 #include <cstdlib>
 #include <nlohmann/json.hpp>
@@ -46,6 +47,19 @@ int g_selectedComboIndex = 0;
 
 // SINGLE POINT OF CONTROL: Global pointer linking back to network engine
 NetworkClient* g_NetworkClient = nullptr;
+
+std::unordered_map<int, HBITMAP> g_cardBitmaps;
+HBITMAP g_backsideBitmap = nullptr;
+
+int g_suitBase[4] = {
+    1,   // Hearts
+    15,  // Spades
+    29,  // Diamonds
+    43   // Clubs
+};
+
+const int CARD_BACK_INDEX = 28;
+
 
 void SetNetworkClientForUI(NetworkClient* client) {
     g_NetworkClient = client;
@@ -98,6 +112,80 @@ void AddStatusMessage(const std::wstring& message)
     }
 
     SendMessage(g_statusLog, LB_SETTOPINDEX, count - 1, 0);
+}
+
+void LoadCardAssets()
+{
+    // Load backside
+    {
+        wchar_t filename[64];
+        wsprintf(filename, L"assets/cards/%02d_kerenel_Cards.png", CARD_BACK_INDEX);
+
+        g_backsideBitmap = (HBITMAP)LoadImageW(
+            nullptr, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE
+        );
+    }
+
+    // Load all suit cards
+    for (int suit = 0; suit < 4; suit++)
+    {
+        int base = g_suitBase[suit];
+
+        for (int rank = 1; rank <= 13; rank++)
+        {
+            int fileIndex = base + (rank - 1);
+
+            wchar_t filename[64];
+            wsprintf(filename, L"assets/cards/%02d_kerenel_Cards.png", fileIndex);
+
+            HBITMAP bmp = (HBITMAP)LoadImageW(
+                nullptr, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE
+            );
+
+            if (bmp)
+                g_cardBitmaps[fileIndex] = bmp;
+        }
+    }
+
+    AddStatusMessage(L"Card assets loaded.");
+}
+
+int GetCardFileIndex(const Card& c)
+{
+    if (c.rank == 0)
+        return CARD_BACK_INDEX;
+
+    return g_suitBase[c.suit] + (c.rank - 1);
+}
+
+void DrawCard(HDC hdc, int x, int y, int w, int h, const Card& c)
+{
+    int index = GetCardFileIndex(c);
+
+    HBITMAP bmp = (index == CARD_BACK_INDEX)
+        ? g_backsideBitmap
+        : g_cardBitmaps[index];
+
+    if (!bmp)
+    {
+        Rectangle(hdc, x, y, x + w, y + h);
+        return;
+    }
+
+    HDC memDC = CreateCompatibleDC(hdc);
+    HBITMAP oldBmp = (HBITMAP)SelectObject(memDC, bmp);
+
+    BITMAP bm;
+    GetObject(bmp, sizeof(bm), &bm);
+
+    StretchBlt(
+        hdc, x, y, w, h,
+        memDC, 0, 0, bm.bmWidth, bm.bmHeight,
+        SRCCOPY
+    );
+
+    SelectObject(memDC, oldBmp);
+    DeleteDC(memDC);
 }
 
 void AddStatusMessageFromUtf8(const std::string& message)
@@ -205,25 +293,6 @@ void UpdateUIFromGameState(HWND hWnd, const GameState& state) {
         SendMessage(g_listPlayers, LB_ADDSTRING, 0, (LPARAM)p.c_str());
 
     InvalidateRect(hWnd, nullptr, TRUE);
-}
-
-void DrawCard(HDC hdc, int x, int y, int w, int h, const Card& c) {
-    Rectangle(hdc, x, y, x + w, y + h);
-    const wchar_t* ranks = L" A23456789TJQK";
-    const wchar_t* suits[] = { L"♣", L"♦", L"♥", L"♠" };
-
-    wchar_t r = ranks[c.rank];
-    const wchar_t* s = suits[c.suit % 4];
-    wchar_t buf[16];
-    wsprintf(buf, L"%c%s", r, s);
-
-    SetBkMode(hdc, TRANSPARENT);
-    RECT cardRect = { x + 5, y + 5, x + w - 5, y + h - 5 };
-
-    // Set color values depending on suits
-    COLORREF oldColor = SetTextColor(hdc, (c.suit % 4 == 1 || c.suit % 4 == 2) ? RGB(200, 0, 0) : RGB(0, 0, 0));
-    DrawText(hdc, buf, -1, &cardRect, DT_LEFT | DT_TOP);
-    SetTextColor(hdc, oldColor);
 }
 
 void DrawTable(HDC hdc, RECT rc) {
@@ -440,6 +509,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     AddStatusMessage(L"Waiting for server messages...");
 
     ShowWindow(hWnd, nCmdShow);
+    LoadCardAssets();
     UpdateWindow(hWnd);
 
     return TRUE;
