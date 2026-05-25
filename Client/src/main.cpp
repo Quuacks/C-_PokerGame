@@ -19,6 +19,67 @@
 
 using json = nlohmann::json;
 
+bool TryReadBoolTurnField(const json& data, const char* key, bool& result)
+{
+    if (data.contains(key) && data[key].is_boolean())
+    {
+        result = data[key].get<bool>();
+        return true;
+    }
+
+    return false;
+}
+
+bool IsLocalPlayersTurn(const json& data, const GameState& state, const std::string& localUsername)
+{
+    bool turnValue = false;
+
+    if (TryReadBoolTurnField(data, "isHeroTurn", turnValue))
+        return turnValue;
+
+    if (TryReadBoolTurnField(data, "isYourTurn", turnValue))
+        return turnValue;
+
+    if (TryReadBoolTurnField(data, "yourTurn", turnValue))
+        return turnValue;
+
+    const char* possibleNameFields[] = {
+        "currentPlayer",
+        "currentPlayerName",
+        "currentTurn",
+        "turnPlayer"
+    };
+
+    for (const char* field : possibleNameFields)
+    {
+        if (data.contains(field) && data[field].is_string())
+        {
+            return data[field].get<std::string>() == localUsername;
+        }
+    }
+
+    const char* possibleIndexFields[] = {
+        "currentPlayerIndex",
+        "turnPlayerIndex",
+        "activePlayerIndex"
+    };
+
+    for (const char* field : possibleIndexFields)
+    {
+        if (data.contains(field) && data[field].is_number_integer())
+        {
+            int index = data[field].get<int>();
+
+            if (index >= 0 && index < (int)state.players.size())
+            {
+                return state.players[index] == Utf8ToWide(localUsername);
+            }
+        }
+    }
+
+    return state.isHeroTurn;
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_opt_ HINSTANCE hPrevInstance,
     _In_ LPWSTR    lpCmdLine,
@@ -52,7 +113,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // 5. Send initial JSON login request packet
-    json loginPacket = { {"type", "LOGIN"}, {"data", {{"username", "Quuacks"}}} };
+    const std::string localUsername = "Quuacks";
+
+    json loginPacket = {
+        {"type", "LOGIN"},
+        {"data", {{"username", localUsername}}}
+    };
+
     client.SendRequest(loginPacket.dump() + "\n");
 
     // 6. Register and create the game UI window frame
@@ -82,13 +149,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
 
         // Handle incoming asynchronous network data updates from the server
-        client.Update([mainHWnd](const std::string& rawServerMessage) {
+        client.Update([mainHWnd, localUsername](const std::string& rawServerMessage) {
             try {
                 json packet = json::parse(rawServerMessage);
 
                 if (packet["type"] == "GAME_STATE") {
-                    GameState state = ParseGameState(packet["data"]);
+                    const json& data = packet["data"];
+
+                    GameState state = ParseGameState(data);
+                    state.isHeroTurn = IsLocalPlayersTurn(data, state, localUsername);
+
                     UpdateUIFromGameState(mainHWnd, state);
+                    SetHeroTurn(state.isHeroTurn);
                 }
 
                 AddStatusMessageFromUtf8("[Server] " + rawServerMessage);

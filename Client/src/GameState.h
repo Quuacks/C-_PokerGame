@@ -22,4 +22,6 @@ struct GameState
 
     int heroChips = 1500;
     int selectedComboIndex = 0;
+
+    bool isHeroTurn = false;
 };

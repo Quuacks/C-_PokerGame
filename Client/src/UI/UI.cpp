@@ -180,6 +180,29 @@ void RefreshActionButtons()
         InvalidateRect(g_mainHWnd, nullptr, TRUE);
 }
 
+void SetActionButtonsEnabled(bool enabled)
+{
+    HWND buttons[] = {
+        g_btnRaise,
+        g_btnCall,
+        g_btnCheck,
+        g_btnFold
+    };
+
+    for (HWND button : buttons)
+    {
+        if (button)
+            EnableWindow(button, enabled ? TRUE : FALSE);
+    }
+
+    if (!enabled)
+    {
+        ShowRaiseControls(false);
+    }
+
+    RefreshActionButtons();
+}
+
 void ShowYourTurnPopup()
 {
     if (!g_mainHWnd)
@@ -200,13 +223,16 @@ void ShowYourTurnPopup()
 
 void SetHeroTurn(bool isHeroTurn)
 {
+    bool wasHeroTurn = g_isHeroTurn;
     g_isHeroTurn = isHeroTurn;
 
-    if (g_isHeroTurn)
+    SetActionButtonsEnabled(g_isHeroTurn);
+
+    if (g_isHeroTurn && !wasHeroTurn)
     {
         ShowYourTurnPopup();
     }
-    else
+    else if (!g_isHeroTurn)
     {
         g_showTurnPopup = false;
 
@@ -300,12 +326,19 @@ void DrawActionButton(const DRAWITEMSTRUCT* drawInfo)
 
     bool pressed = (drawInfo->itemState & ODS_SELECTED) != 0;
     bool focused = (drawInfo->itemState & ODS_FOCUS) != 0;
+    bool disabled = (drawInfo->itemState & ODS_DISABLED) != 0;
 
     COLORREF backgroundColor;
     COLORREF borderColor;
     COLORREF textColor;
 
-    if (g_isHeroTurn)
+    if (disabled)
+    {
+        backgroundColor = RGB(210, 210, 210);
+        borderColor = RGB(160, 160, 160);
+        textColor = RGB(120, 120, 120);
+    }
+    else if (g_isHeroTurn)
     {
         backgroundColor = pressed ? RGB(220, 170, 40) : RGB(255, 210, 70);
         borderColor = RGB(130, 90, 0);
@@ -967,16 +1000,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PositionControls(hWnd);
         break;
 
-    case WM_KEYDOWN:
-        if (wParam == 'T')
-        {
-            SetHeroTurn(!g_isHeroTurn);
-        }
-        break;
-
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case ID_BTN_RAISE:
+            if (!g_isHeroTurn)
+            {
+                AddStatusMessage(L"Not your turn.");
+                break;
+            }
+
             ShowRaiseControls(true);
             UpdateRaiseAmountText();
             AddStatusMessage(L"Raise selected. Choose an amount.");
@@ -992,6 +1024,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
 
         case ID_BTN_CONFIRM_RAISE: {
+            if (!g_isHeroTurn)
+            {
+                ShowRaiseControls(false);
+                AddStatusMessage(L"Not your turn.");
+                break;
+            }
+
             int raiseAmount = GetRaiseAmountFromEdit();
             g_raisePreviewAmount = raiseAmount;
             ShowRaiseControls(false);
@@ -1017,6 +1056,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
 
         case ID_BTN_CALL:
+            if (!g_isHeroTurn)
+            {
+                AddStatusMessage(L"Not your turn.");
+                break;
+            }
+
             ShowRaiseControls(false);
             AddStatusMessage(L"Call selected.");
 
@@ -1027,6 +1072,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
 
         case ID_BTN_CHECK:
+            if (!g_isHeroTurn)
+            {
+                AddStatusMessage(L"Not your turn.");
+                break;
+            }
+
             ShowRaiseControls(false);
             AddStatusMessage(L"Check selected.");
 
@@ -1037,6 +1088,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
 
         case ID_BTN_FOLD:
+            if (!g_isHeroTurn)
+            {
+                AddStatusMessage(L"Not your turn.");
+                break;
+            }
+
             ShowRaiseControls(false);
             AddStatusMessage(L"Fold selected.");
 
@@ -1171,6 +1228,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
 
     AddStatusMessage(L"UI started.");
     AddStatusMessage(L"Waiting for server messages...");
+
+    SetHeroTurn(false);
 
     ShowWindow(hWnd, nCmdShow);
     LoadCardAssets();
