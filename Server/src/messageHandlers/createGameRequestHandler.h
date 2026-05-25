@@ -1,9 +1,10 @@
 #pragma once
 #include "requestHandler.h"
+#include "../Application.h"
 
-class CreateGameRequestHandler : public RequestHandler
+class CreateGameRequestHandler : public requestHandler
 { 
-    void Execute(std::string message) override 
+    void ExecuteRaw(Application& app, SOCKET rawSocket, const nlohmann::json& data) override
     {
 
     }

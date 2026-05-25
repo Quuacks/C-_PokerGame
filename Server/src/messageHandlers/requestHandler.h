@@ -3,15 +3,16 @@
 #include <nlohmann/json.hpp>
 #include <winsock2.h>
 
+class Application;
 class Player;
 
-class RequestHandler
+class requestHandler
 { 
     public:
-        virtual ~RequestHandler() = default;
+        virtual ~requestHandler() = default;
 
-        virtual void ExecuteRaw(SOCKET rawSocket, const json& data){}
+        virtual void ExecuteRaw(Application& app, SOCKET rawSocket, const nlohmann::json& data){}
 
-        virtual void ExecutePlayer(Player& player, const json& data){}
+        virtual void ExecutePlayer(Application& app, Player& player, const nlohmann::json& data){}
 };
 

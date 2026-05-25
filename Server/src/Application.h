@@ -9,7 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <functional>
-#include <messageHandlers/requestHandler.h>
+#include "messageHandlers/requestHandler.h"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -19,6 +19,8 @@ class Application
 public:
     Application();
     void Start();
+    void AddAuthenticatedPlayer(SOCKET socket, const std::string& username);
+
 private:
     void MainLoop();
     void HandleRawMessage(SOCKET rawSocket, const std::string& message);
@@ -33,9 +35,9 @@ private:
     RoomManager m_RoomManager;
     NetworkManager m_NetworkManager;
 
-    std::map<std::string, std::unique_ptr<RequestHandler>> m_Handlers;
+    std::unordered_map<std::string, std::unique_ptr<requestHandler>> m_Handlers;
 
-    std::unordered_map<std::string, std::function<void(SOCKET, const json&)>> m_RawHandlers;
+    std::unordered_map<std::string, std::function<void(Application, SOCKET, const json&)>> m_RawHandlers;
 
     // Player routes map a string type to a function that takes a Player reference and JSON data
     std::unordered_map<std::string, std::function<void(Player&, const json&)>> m_PlayerHandlers;

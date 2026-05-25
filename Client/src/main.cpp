@@ -43,15 +43,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     NetworkClient client;
     SetNetworkClientForUI(&client); // Pass the client pointer to UI backend!
 
-    //if (!client.ConnectToServer("127.0.0.1", 54000)) {
-    //    MessageBox(nullptr, L"Failed to connect to poker server!", L"Error", MB_ICONERROR);
-    //    WSACleanup();
-    //    return 0;
-    //}
+    if (!client.ConnectToServer("127.0.0.1", 54000)) {
+        MessageBox(nullptr, L"Failed to connect to poker server!", L"Error", MB_ICONERROR);
+        WSACleanup();
+        return 0;
+    }
 
-    //// 5. Send initial JSON login request packet
-    //json loginPacket = { {"type", "LOGIN"}, {"data", {{"username", "PlayerHero"}}} };
-    //client.SendRequest(loginPacket.dump() + "\n");
+    // 5. Send initial JSON login request packet
+    json loginPacket = { {"type", "LOGIN"}, {"data", {{"username", "Quuacks"}}} };
+    client.SendRequest(loginPacket.dump() + "\n");
 
     // 6. Register and create the game UI window frame
     MyRegisterClass(hInstance);

@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <functional>
 #include <nlohmann/json.hpp>
+#include "messageHandlers/joinGameRequestHandler.h"
+#include "messageHandlers/playerActionRequestHandler.h"
 
 Application::Application()
 {
@@ -12,11 +14,10 @@ Application::Application()
 
 void Application::RegisterHandlers() 
 {
-    m_RawHandlers["LOGIN"] = [this](SOCKET sock, const json& data) { HandleLogin(sock, data); };
-
-    // Register Player handlers (authenticated users)
-    m_PlayerHandlers["RAISE"] = [this](Player& p, const json& data) { HandleRaise(p, data); };
-    m_PlayerHandlers["FOLD"] = [this](Player& p, const json& data) { HandleFold(p, data); };
+    m_Handlers["LOGIN"] = std::make_unique<joinGameRequestHandler>();
+    m_Handlers["RAISE"] = std::make_unique<playerActionRequestHandler>();
+    m_Handlers["FOLD"] = std::make_unique<playerActionRequestHandler>();
+    m_Handlers["CHECK"] = std::make_unique<playerActionRequestHandler>();
 }
 
 void Application::Start() {
@@ -28,7 +29,7 @@ void Application::Start() {
     }
 
     std::cout << "Server successfully listening on port 54000..." << std::endl;
-
+    RegisterHandlers();
     MainLoop();
 }
 
@@ -58,8 +59,8 @@ void Application::HandleRawMessage(SOCKET rawSocket, const std::string& message)
 
     // 2. Make ABSOLUTELY sure the right side matches 'm_Handlers' exactly
     if (it != m_Handlers.end()) {
-        // 3. Because it's a unique_ptr, execute via the arrow operator
-        //it->second->Execute(rawSocket, data);
+
+        it->second->ExecuteRaw(*this, rawSocket, data);
     }
     else {
         std::cout << "[SERVER] Unknown action type: " << type << "\n";
@@ -79,30 +80,13 @@ void Application::HandlePlayerMessage(Player& player, const std::string& message
     //game logic parsing here. Things like Player Actions
     std::cout << "TYPE: " << type << "   PAYLOAD: " << payload << "\n";
 }
-void Application::HandleLogin(SOCKET rawSocket, const nlohmann::json& data) {
-    // 1. Extract the username from the JSON payload safely
-    // If the "username" key is missing, it defaults to "Unknown_Pro"
-    std::string username = data.value("username", "Unknown_Pro");
 
-    std::cout << "[SERVER] Processing login request for user: " << username << "\n";
+void Application::AddAuthenticatedPlayer(SOCKET socket, const std::string& username) {
+    Player newPlayer(socket, username);
 
+    m_Players.push_back(newPlayer);
 
-    std::cout << "[SERVER] User '" << username << "' logged in successfully.\n";
-}
-
-void Application::HandleRaise(Player& player, const nlohmann::json& data) {
-    // 1. Extract the raise amount out of the nested JSON packet
-    int raiseAmount = data.value("amount", 0);
-
-    // 2. Fetch the player's name (assuming your Player class has GetName())
-    std::cout << "[SERVER] Player raised by: " << raiseAmount << " chips.\n";
-
-    
-}
-
-void Application::HandleFold(Player& player, const nlohmann::json& data) {
-    std::cout << "[SERVER] Player folded their hand.\n";
-
-    
+    std::cout << "[Server] " << username << "has joined the server. Total players: " << m_Players.size() << "\n";
+    //send login confirm json packet to client
 }
 
