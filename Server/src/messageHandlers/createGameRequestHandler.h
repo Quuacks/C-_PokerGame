@@ -1,5 +1,5 @@
 #pragma once
-#include "requestHandler.h"
+#include <handler/requestHandler.h>
 #include "../Application.h"
 
 class CreateGameRequestHandler : public requestHandler

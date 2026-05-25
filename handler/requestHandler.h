@@ -14,5 +14,7 @@ class requestHandler
         virtual void ExecuteRaw(Application& app, SOCKET rawSocket, const nlohmann::json& data){}
 
         virtual void ExecutePlayer(Application& app, Player& player, const nlohmann::json& data){}
+
+        virtual void ExecuteServer(const nlohmann::json& data){}
 };
 

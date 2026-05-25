@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\game\gameManager.cpp" />
     <ClCompile Include="src\game\deck.cpp" />
     <ClCompile Include="src\game\handEvaluator.cpp" />
     <ClCompile Include="src\game\handEvaluator.h" />
@@ -145,11 +146,11 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\game\gameManager.h" />
     <ClInclude Include="src\game\deck.h" />
     <ClInclude Include="src\messageHandlers\createGameRequestHandler.h" />
     <ClInclude Include="src\messageHandlers\joinGameRequestHandler.h" />
     <ClInclude Include="src\messageHandlers\playerActionRequestHandler.h" />
-    <ClInclude Include="src\messageHandlers\requestHandler.h" />
     <ClInclude Include="src\game\room.h" />
     <ClInclude Include="src\game\player.h" />
     <ClInclude Include="src\game\roomManager.h" />

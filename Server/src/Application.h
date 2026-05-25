@@ -9,7 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <functional>
-#include "messageHandlers/requestHandler.h"
+#include <handler/requestHandler.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
