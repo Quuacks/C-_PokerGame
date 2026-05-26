@@ -3,7 +3,6 @@
 #include <chrono>
 #include <thread>
 #include "Network/networkManager.h"
-#include "game/roomManager.h"
 #include "core/logging.h"
 #include <WS2tcpip.h>
 #include <iostream>
@@ -33,7 +32,6 @@ private:
     GameState m_Game;         
     void MainLoop();
     void HandleRawMessage(SOCKET rawSocket, const std::string& message);
-    void HandlePlayerMessage(Player& player, const std::string& message);
     
     void RegisterHandlers();
 
@@ -41,7 +39,6 @@ private:
     void HandleRaise(Player& player, const nlohmann::json& data);
     void HandleFold(Player& player, const nlohmann::json& data);
 
-    RoomManager m_RoomManager;
     NetworkManager m_NetworkManager;
 
     std::unordered_map<std::string, std::unique_ptr<requestHandler>> m_Handlers;

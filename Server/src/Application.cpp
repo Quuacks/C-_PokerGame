@@ -48,7 +48,6 @@ void Application::MainLoop()
         m_NetworkManager.Update(
             m_Players,
             [&](SOCKET sock, const std::string& msg) { HandleRawMessage(sock, msg); },
-            [&](Player& player, const std::string& msg) { HandlePlayerMessage(player, msg); },
             [&](SOCKET disconnectedSocket) { m_Table.RemovePlayer(disconnectedSocket); }
         );
 
@@ -101,37 +100,6 @@ void Application::HandleRawMessage(SOCKET rawSocket, const std::string& message)
     else {
         std::cout << "[SERVER] Unknown action type: " << type << "\n";
     }
-    
-}
-
-void Application::HandlePlayerMessage(Player& player, const std::string& message) {    
-    std::cout << "[NETWORK INBOUND] Raw string received from " << player.GetUsername() << ": " << message << std::endl;
-
-    if (message.empty())
-        return;
-    
-    try {
-        json packet = json::parse(message);
-        std::string type = packet.value("type", "");
-
-        auto it = m_Handlers.find(type);
-        if (it != m_Handlers.end()) {
-            // Packet shape from client: { "type": "...", "data": { ... } }
-            // Handlers expect the JSON "data" payload.
-            std::cout << "[Server] Routing type '" << type << "' to message handler..." << std::endl;
-
-            it->second->ExecutePlayer(*this, player, packet.value("data", json::object()));
-            BroadcastGameState();
-        }
-        else {
-            std::cout << "[Server] Uknown player action " << type << "\n";
-        }
-
-    }
-    catch (const json::parse_error& e){
-        std::cout << "[Server] JSON Parse Error from player " << player.GetUsername() << ": " << e.what() << "\n";
-    }
-
     
 }
 

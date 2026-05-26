@@ -19,7 +19,6 @@ public:
     // Called every frame by Application::MainLoop to poll for data/connections
     void Update(std::vector<std::shared_ptr<Player>>& authenticatedPlayers,
                 std::function<void(SOCKET, const std::string&)> rawCallback,
-                std::function<void(Player&, const std::string&)> playerCallback,
                 std::function<void(SOCKET)> disconnectCallback);
 
     // Utility to send data back to a specific socket
@@ -37,8 +36,5 @@ private:
 
     void HandleNewConnections();
     void PollRawSockets(std::function<void(SOCKET, const std::string&)> rawCallback);
-    void PollAuthenticatedPlayers(std::vector<std::shared_ptr<Player>>& players,
-                                    std::function<void(Player&, const std::string&)> handler,
-                                    std::function<void(SOCKET)> disconnectCallback);
 };
 
