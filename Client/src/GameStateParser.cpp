@@ -15,12 +15,6 @@ GameState ParseGameState(const json& data)
     if (data.contains("isHeroTurn") && data["isHeroTurn"].is_boolean())
         state.isHeroTurn = data["isHeroTurn"].get<bool>();
 
-    if (data.contains("isYourTurn") && data["isYourTurn"].is_boolean())
-        state.isHeroTurn = data["isYourTurn"].get<bool>();
-
-    if (data.contains("yourTurn") && data["yourTurn"].is_boolean())
-        state.isHeroTurn = data["yourTurn"].get<bool>();
-
     if (data.contains("players") && data["players"].is_array())
     {
         for (auto& p : data["players"])

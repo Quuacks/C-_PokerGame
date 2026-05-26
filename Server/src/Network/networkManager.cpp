@@ -109,9 +109,19 @@ void NetworkManager::PollRawSockets(std::function<void(SOCKET, const std::string
             char buffer[4096];
             int bytesReceived = recv(rawSock, buffer, sizeof(buffer) - 1, 0);
 
-            if (bytesReceived <= 0) {
-                // Client disconnected before logging in
-                std::cout << "[NETWORK] Raw client dropped connection on socket: " << rawSock << "\n";
+            if (bytesReceived == 0) {
+                std::cout << "[NETWORK] Unauthenticated raw client disconnected gracefully on socket: " << rawSock << "\n";
+                closesocket(rawSock);
+                it = m_RawSockets.erase(it);
+                continue;
+            }
+            else if (bytesReceived == SOCKET_ERROR) {
+                int error = WSAGetLastError();
+                if (error == WSAEWOULDBLOCK) {
+                    ++it;
+                    continue;
+                }
+                std::cout << "[NETWORK] Unauthenticated raw client connection lost forcibly on socket: " << rawSock << "\n";
                 closesocket(rawSock);
                 it = m_RawSockets.erase(it);
                 continue;
@@ -143,10 +153,16 @@ void NetworkManager::PollAuthenticatedPlayers(
             char buffer[4096];
             int bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
-            if (bytesReceived <= 0) {
+            if (bytesReceived == 0) {
+                std::cout << "[NETWORK] Player disconnected gracefully: " << playerPtr->GetUsername() << "\n";
+                closesocket(clientSocket);
+                it = players.erase(it);
+                continue;
+            }
+            else if (bytesReceived == SOCKET_ERROR) {
                 int error = WSAGetLastError();
 
-                if (bytesReceived == SOCKET_ERROR && error == WSAEWOULDBLOCK) {
+                if (error == WSAEWOULDBLOCK) {
                     ++it;
                     continue;
                 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "GameStructures.h"
+#include "player.h"
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -40,6 +41,19 @@ class GameTable
         void AdvanceBettingRound();
         void ProcessPlayerAction(SOCKET socket, const std::string& actionType, int amount = 0);
 
+        int getPot() {
+            return m_Pot;
+        }
+        
+        std::vector<ServerCard> getCommunityCards() {
+            return m_CommunityCards;
+        }
+
+        SOCKET GetCurrentTurnSocket() {
+            return m_Players[ m_CurrentTurnIdx ]->getSocket();
+        }
+
+        int m_ActionsThisRound = 0;
         int SMALL_BLIND = 10;
         int BIG_BLIND = 20;
 

@@ -105,32 +105,56 @@ void Application::AddAuthenticatedPlayer(SOCKET socket, const std::string& usern
 
 void Application::BroadcastGameState()
 {
-    //json packet;
-    //packet["type"] = "GAME_STATE";
 
-    //// Build data object explicitly because Card is a custom struct
-    //json data;
-    //data["pot"] = m_Game.pot;
+    std::cout << "[Server] BroadCastingGameState\n";
 
-    //data["boardCards"] = json::array();
-    //for (const auto& c : m_Game.boardCards) {
-    //    data["boardCards"].push_back({ {"rank", c.rank}, {"suit", c.suit} });
-    //}
+    json packet;
+    packet["type"] = "GAME_STATE"; // Matches client's routing router
 
-    //data["heroCards"] = json::array();
-    //for (const auto& c : m_Game.heroCards) {
-    //    data["heroCards"].push_back({ {"rank", c.rank}, {"suit", c.suit} });
-    //}
+    json data;
+    data["pot"] = m_Table.getPot();
+    data["selectedComboIndex"] = 0; // Fallback or computed combo value
 
-    //data["players"] = m_Game.playerNames;
-    //data["playerChips"] = m_Game.playerChips;
-    //data["heroChips"] = m_Game.heroChips;
-    //data["selectedComboIndex"] = m_Game.selectedComboIndex;
+    // Arrays for table layout
+    json playersArray = json::array();
+    json chipsArray = json::array();
 
-    //packet["data"] = data;
+    for (const auto& playerPtr : m_Players) {
+        if (!playerPtr) continue;
+        playersArray.push_back(playerPtr->GetUsername());
+        chipsArray.push_back(playerPtr->getChips());
+    }
+    data["players"] = playersArray;
+    data["playerChips"] = chipsArray;
 
-    //std::string msg = packet.dump() + "\n";
+    // Map community cards
+    json boardCardsArray = json::array();
+    for (const auto& card : m_Table.getCommunityCards()) {
+        boardCardsArray.push_back({ {"rank", card.rank}, {"suit", card.suit} });
+    }
+    data["boardCards"] = boardCardsArray;
 
-    //for (auto& p : m_Players)
-    //    send(p->getSocket(), msg.c_str(), static_cast<int>(msg.size()), 0);
+    // Loop through players individually to send private hole cards and hero metrics
+    for (const auto& playerPtr : m_Players) {
+        if (!playerPtr) continue;
+
+        json privateData = data; // Clone master table data layout
+
+        // Populate fields specific to this connection
+        privateData["heroChips"] = playerPtr->getChips();
+        privateData["isYourTurn"] = (m_Table.GetCurrentTurnSocket() == playerPtr->getSocket());
+
+        json heroCardsArray = json::array();
+        for (const auto& card : playerPtr->GetHoleCards()) {
+            heroCardsArray.push_back({ {"rank", card.rank}, {"suit", card.suit} });
+        }
+        privateData["heroCards"] = heroCardsArray;
+
+        // Wrap payload up
+        packet["data"] = privateData;
+        std::string payload = packet.dump() + "\n";
+
+        // Send down the pipe to this specific client player
+        send(playerPtr->getSocket(), payload.c_str(), static_cast<int>(payload.length()), 0);
+    }
 }

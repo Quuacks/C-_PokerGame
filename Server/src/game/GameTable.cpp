@@ -26,6 +26,10 @@ void GameTable::StartNewHand()
 
     m_CommunityCards.clear();
 
+    for (auto& player : m_Players) {
+        if (player) player->ClearHand();
+    }
+
     BuildDeck();
     ShuffleDeck();
     CollectBlinds();
@@ -34,6 +38,8 @@ void GameTable::StartNewHand()
 
 void GameTable::AdvanceBettingRound()
 {
+    m_CurrentBet = 0;
+
     if (m_Round == BettingRound::PRE_FLOP) {
         m_Round = BettingRound::FLOP;
         std::cout << "Moving To Flop";
@@ -72,7 +78,6 @@ void GameTable::ProcessPlayerAction(SOCKET socket, const std::string& actionType
         return;
     }
 
-    if (actionType == "FOLD") {
         if (actionType == "FOLD") {
             std::cout << "[ACTION] " << activePlayer->GetUsername() << " folds.\n";
             // TODO: Update player status to FOLDED inside your player class if tracking status
@@ -80,7 +85,7 @@ void GameTable::ProcessPlayerAction(SOCKET socket, const std::string& actionType
         else if (actionType == "CALL") {
             int callAmount = m_CurrentBet; // Total needed to match the round bet
             m_Pot += callAmount;
-            // activePlayer->DeductChips(callAmount);
+            activePlayer->RemoveChips(callAmount);
             std::cout << "[ACTION] " << activePlayer->GetUsername() << " calls " << callAmount << "\n";
         }
         else if (actionType == "CHECK") {
@@ -89,7 +94,7 @@ void GameTable::ProcessPlayerAction(SOCKET socket, const std::string& actionType
         else if (actionType == "RAISE") {
             m_CurrentBet = amount;
             m_Pot += amount;
-            // activePlayer->DeductChips(amount);
+            activePlayer->RemoveChips(amount);
             std::cout << "[ACTION] " << activePlayer->GetUsername() << " raises to " << amount << "\n";
         }
 
@@ -99,7 +104,6 @@ void GameTable::ProcessPlayerAction(SOCKET socket, const std::string& actionType
         else {
             MoveTurnToNextActivePlayer();
         }
-    }
 }
 
 void GameTable::BuildDeck()
@@ -131,7 +135,8 @@ void GameTable::DealCards()
                 return;
             ServerCard topCard = m_Deck.back();
             m_Deck.pop_back();
-            //Add card to player
+            
+            player->DealCard(topCard);
         }
     }
 }
@@ -141,7 +146,11 @@ void GameTable::CollectBlinds()
     if (m_Players.size() < 2)
         return;
     std::cout << "[Table] Collecting small and big blind";
-    //add -chips to players
+    m_Players[0]->RemoveChips(SMALL_BLIND);
+    if (m_Players.size() > 1) {
+        m_Players[1]->RemoveChips(BIG_BLIND);
+    }
+
     m_Pot += SMALL_BLIND + BIG_BLIND;
     m_CurrentBet = BIG_BLIND;
 }
@@ -151,18 +160,27 @@ void GameTable::MoveTurnToNextActivePlayer()
     if (m_Players.empty())
         return;
 
-    m_CurrentTurnIdx = (m_CurrentTurnIdx + 1) % m_Players.size();
+    size_t initialScanIndex = m_CurrentTurnIdx;
 
-    //Skip players who have folded.
-    std::cout << "Next turn is player index: " << m_CurrentTurnIdx << "\n";
+    do {
+        m_CurrentTurnIdx = (m_CurrentTurnIdx + 1) % m_Players.size();
+        if (m_CurrentTurnIdx == initialScanIndex) break;
+    } while (m_Players[m_CurrentTurnIdx]->IsFolded());
+
+    std::cout << "Next turn is player index: " << m_CurrentTurnIdx << " (" << m_Players[m_CurrentTurnIdx]->GetUsername() << ")\n";
 }
 
 bool GameTable::IsBettingRoundComplete()
 {
-    static int actionsThisRound = 0;
-    actionsThisRound++;
-    if (actionsThisRound >= m_Players.size()) {
-        actionsThisRound = 0;
+    m_ActionsThisRound++;
+    
+    int activePlayers = 0;
+    for (const auto& p : m_Players) {
+        if (p && !p->IsFolded()) activePlayers++;
+    }
+
+    if (m_ActionsThisRound >= activePlayers) {
+        m_ActionsThisRound = 0;
         return true;
     }
     return false;
@@ -172,7 +190,11 @@ void GameTable::EvaluateShowdown()
 {
     std::cout << "Evaluating Hands and distributing Pot: " << m_Pot << "\n";
     //Placeholder logic for now
-    if (!m_Players.empty()) {
-        //m_Players[0]->AddChips(m_Pot);
+    for (auto& player : m_Players) {
+        if (player && !player->IsFolded()) {
+            player->AddChips(m_Pot);
+            std::cout << "[WINNER] Awarded " << m_Pot << " chips to " << player->GetUsername() << "\n";
+            break;
+        }
     }
 }
