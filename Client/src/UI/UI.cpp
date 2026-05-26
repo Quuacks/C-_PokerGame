@@ -750,14 +750,40 @@ void DrawRaisePreview(HDC hdc, Gdiplus::Graphics& graphics)
 
 void LoadCardAssets()
 {
+    StartGdiPlus();
+
+    std::vector<std::wstring> cardFolders = {
+        L"src\\Textures\\Cards\\",
+        L"..\\Client\\src\\Textures\\Cards\\",
+        L"..\\src\\Textures\\Cards\\",
+        L"assets\\cards\\",
+        L"..\\assets\\cards\\"
+    };
+
+    std::wstring cardFolder = ResolveExistingAssetPath(cardFolders);
+
+    if (cardFolder.empty())
+    {
+        AddStatusMessage(L"[ERROR] No card folder found.");
+        return;
+    }
+
     // Load backside
     {
-        wchar_t filename[64];
-        wsprintf(filename, L"assets/cards/%02d_kerenel_Cards.png", CARD_BACK_INDEX);
+        wchar_t filename[256];
+        wsprintf(filename, L"%s%02d_kerenel_Cards.png", cardFolder.c_str(), CARD_BACK_INDEX);
 
-        g_backsideBitmap = (HBITMAP)LoadImageW(
-            nullptr, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE
-        );
+        auto img = std::make_unique<Gdiplus::Bitmap>(filename);
+        if (img->GetLastStatus() == Gdiplus::Ok)
+        {
+            HBITMAP hBmp;
+            img->GetHBITMAP(Gdiplus::Color(0,0,0), &hBmp);
+            g_backsideBitmap = hBmp;
+        }
+        else
+        {
+            AddStatusMessage(L"[ERROR] Failed to load backside.");
+        }
     }
 
     // Load all suit cards
@@ -769,20 +795,29 @@ void LoadCardAssets()
         {
             int fileIndex = base + (rank - 1);
 
-            wchar_t filename[64];
-            wsprintf(filename, L"assets/cards/%02d_kerenel_Cards.png", fileIndex);
+            wchar_t filename[256];
+            wsprintf(filename, L"%s%02d_kerenel_Cards.png", cardFolder.c_str(), fileIndex);
 
-            HBITMAP bmp = (HBITMAP)LoadImageW(
-                nullptr, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE
-            );
+            auto img = std::make_unique<Gdiplus::Bitmap>(filename);
 
-            if (bmp)
-                g_cardBitmaps[fileIndex] = bmp;
+            if (img->GetLastStatus() == Gdiplus::Ok)
+            {
+                HBITMAP hBmp;
+                img->GetHBITMAP(Gdiplus::Color(0,0,0), &hBmp);
+                g_cardBitmaps[fileIndex] = hBmp;
+            }
+            else
+            {
+                wchar_t msg[256];
+                wsprintf(msg, L"[WARN] Missing card texture: %s", filename);
+                AddStatusMessage(msg);
+            }
         }
     }
 
-    AddStatusMessage(L"Card assets loaded.");
+    AddStatusMessage(L"Card assets loaded using GDI+ (PNG supported).");
 }
+
 
 int GetCardFileIndex(const Card& c)
 {
