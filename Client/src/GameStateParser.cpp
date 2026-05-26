@@ -12,8 +12,13 @@ GameState ParseGameState(const json& data)
     state.selectedComboIndex = data.value("selectedComboIndex", 0);
     state.heroChips = data.value("heroChips", 1500);
 
-    if (data.contains("isHeroTurn") && data["isHeroTurn"].is_boolean())
+    // Server sends `isHeroTurn` (and also `isYourTurn` as an alias). Keep the client resilient.
+    if (data.contains("isHeroTurn") && data["isHeroTurn"].is_boolean()) {
         state.isHeroTurn = data["isHeroTurn"].get<bool>();
+    }
+    else if (data.contains("isYourTurn") && data["isYourTurn"].is_boolean()) {
+        state.isHeroTurn = data["isYourTurn"].get<bool>();
+    }
 
     if (data.contains("players") && data["players"].is_array())
     {

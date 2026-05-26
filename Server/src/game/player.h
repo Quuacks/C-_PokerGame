@@ -6,6 +6,9 @@
 
 class Player {
 public:
+
+    int m_CurrentRoundBet = 0;
+
     Player(SOCKET socket, std::string username)
         : m_Username(std::move(username)), m_Socket(socket), m_Chips(2000){ }
 
@@ -64,4 +67,5 @@ private:
 
     std::vector<ServerCard> m_HoleCards;
     std::string m_NetworkBuffer;
+
 };

@@ -55,7 +55,8 @@ bool NetworkManager::Initialize(int port)
 
 void NetworkManager::Update(std::vector<std::shared_ptr<Player>>& authenticatedPlayers,
             std::function<void(SOCKET, const std::string&)> rawCallback,
-            std::function<void(Player&, const std::string&)> playerCallback) {
+            std::function<void(Player&, const std::string&)> playerCallback,
+            std::function<void(SOCKET)> disconnectCallback) {
 
     FD_ZERO(&m_ReadSet);
 
@@ -81,7 +82,7 @@ void NetworkManager::Update(std::vector<std::shared_ptr<Player>>& authenticatedP
 
         PollRawSockets(rawCallback);
 
-        PollAuthenticatedPlayers(authenticatedPlayers, playerCallback);
+        PollAuthenticatedPlayers(authenticatedPlayers, playerCallback, disconnectCallback);
     }
 }
 
@@ -142,43 +143,64 @@ void NetworkManager::PollRawSockets(std::function<void(SOCKET, const std::string
 
 void NetworkManager::PollAuthenticatedPlayers(
     std::vector<std::shared_ptr<Player>>& players,
-    std::function<void(Player&, const std::string&)> handler)
+    std::function<void(Player&, const std::string&)> handler,
+    std::function<void(SOCKET)> disconnectCallback)
 {
-    for (auto it = players.begin(); it != players.end(); ) {
-        auto& playerPtr = *it;
+
+    return;
+
+    // Fix: Iterate using an index or a safe copy to prevent vector mutation crashes
+    for (size_t i = 0; i < players.size(); ++i) {
+        auto& playerPtr = players[i];
+        if (!playerPtr) continue;
+
         SOCKET clientSocket = playerPtr->getSocket();
 
-        // Use the passed-in readSet variable directly!
         if (FD_ISSET(clientSocket, &m_ReadSet)) {
             char buffer[4096];
             int bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
             if (bytesReceived == 0) {
-                std::cout << "[NETWORK] Player disconnected gracefully: " << playerPtr->GetUsername() << "\n";
+                std::cout << "[NETWORK] Player disconnected gracefully: " << playerPtr->GetUsername() << std::endl;
                 closesocket(clientSocket);
-                it = players.erase(it);
+                if (disconnectCallback) disconnectCallback(clientSocket);
+                players.erase(players.begin() + i);
+                --i;
                 continue;
             }
             else if (bytesReceived == SOCKET_ERROR) {
                 int error = WSAGetLastError();
-
                 if (error == WSAEWOULDBLOCK) {
-                    ++it;
                     continue;
                 }
-
-                std::cout << "[NETWORK] Player disconnected: " << playerPtr->GetUsername() << "\n";
+                std::cout << "[NETWORK] Player disconnected forcibly: " << playerPtr->GetUsername() << std::endl;
                 closesocket(clientSocket);
-                it = players.erase(it);
+                if (disconnectCallback) disconnectCallback(clientSocket);
+                players.erase(players.begin() + i);
+                --i;
                 continue;
             }
             else {
                 buffer[bytesReceived] = '\0';
-                std::string message(buffer);
-                handler(*playerPtr, message);
+
+                // Append the raw chunk to this player's dedicated stream buffer
+                playerPtr->AppendToNetworkBuffer(std::string(buffer, bytesReceived));
+                std::cout << "[NET] Raw bytes appended for " << playerPtr->GetUsername() << ". Buffer size: " << playerPtr->GetNetworkBuffer().size() << std::endl;
+
+                // Slice out complete messages separated by your client's '\n' delimiter
+                std::string& netBuffer = playerPtr->GetNetworkBuffer();
+                size_t newlinePos;
+                while ((newlinePos = netBuffer.find('\n')) != std::string::npos) {
+                    std::string singleMessage = netBuffer.substr(0, newlinePos);
+                    netBuffer.erase(0, newlinePos + 1);
+
+                    if (!singleMessage.empty()) {
+                        std::cout << "[NET] Dispatching assembled message to Application layer!" << std::endl;
+                        handler(*playerPtr, singleMessage);
+                    }
+                }
             }
         }
-        ++it;
     }
 }
 
