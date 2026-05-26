@@ -22,6 +22,7 @@ using json = nlohmann::json;
 #define ID_BTN_CALL           1002
 #define ID_BTN_CHECK          1003
 #define ID_BTN_FOLD           1004
+#define ID_BTN_START_GAME     1005
 
 #define ID_SLIDER             2001
 #define ID_EDIT_RAISE_AMOUNT  2002
@@ -41,6 +42,7 @@ HWND g_editRaiseAmount;
 HWND g_btnConfirmRaise;
 HWND g_btnCancelRaise;
 HWND g_btnRaise, g_btnCall, g_btnCheck, g_btnFold;
+HWND g_btnStartGame;
 HWND g_comboHands, g_listPlayers;
 HWND g_statusLog;
 
@@ -910,6 +912,15 @@ void PositionControls(HWND hWnd) {
     MoveWindow(g_btnCheck, margin + 2 * (btnWidth + 10), yButtons, btnWidth, btnHeight, TRUE);
     MoveWindow(g_btnFold, margin + 3 * (btnWidth + 10), yButtons, btnWidth, btnHeight, TRUE);
 
+    MoveWindow(
+        g_btnStartGame,
+        margin + 4 * (btnWidth + 10),
+        yButtons,
+        btnWidth + 30,
+        btnHeight,
+        TRUE
+    );
+
     int raiseY = yButtons - 45;
     MoveWindow(g_hSlider, margin, raiseY, btnWidth * 2, 30, TRUE);
     MoveWindow(g_editRaiseAmount, margin + btnWidth * 2 + 10, raiseY, 70, 25, TRUE);
@@ -1033,6 +1044,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
+        case ID_BTN_START_GAME:
+            AddStatusMessage(L"Start game selected.");
+            SendPlayerActionToServer("START_GAME");
+            break;
+
         case ID_BTN_RAISE:
             if (!g_isHeroTurn)
             {
@@ -1202,6 +1218,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     g_btnCall = CreateWindow(L"BUTTON", L"Call", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CALL, hInst, nullptr);
     g_btnCheck = CreateWindow(L"BUTTON", L"Check", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_CHECK, hInst, nullptr);
     g_btnFold = CreateWindow(L"BUTTON", L"Fold", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0, hWnd, (HMENU)ID_BTN_FOLD, hInst, nullptr);    g_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, L"", WS_CHILD | TBS_AUTOTICKS, 0, 0, 0, 0, hWnd, (HMENU)ID_SLIDER, hInst, nullptr);
+
+    g_btnStartGame = CreateWindow(
+        L"BUTTON",
+        L"Start Game",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        hWnd,
+        (HMENU)ID_BTN_START_GAME,
+        hInst,
+        nullptr
+    );
 
     SendMessage(g_hSlider, TBM_SETRANGE, TRUE, MAKELPARAM(MIN_RAISE, MAX_RAISE));
     SendMessage(g_hSlider, TBM_SETPOS, TRUE, 10);
