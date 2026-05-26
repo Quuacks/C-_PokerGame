@@ -926,8 +926,7 @@ void PositionControls(HWND hWnd) {
     MoveWindow(g_editRaiseAmount, margin + btnWidth * 2 + 10, raiseY, 70, 25, TRUE);
     MoveWindow(g_btnConfirmRaise, margin + btnWidth * 2 + 90, raiseY, 60, 25, TRUE);
     MoveWindow(g_btnCancelRaise, margin + btnWidth * 2 + 155, raiseY, 70, 25, TRUE);
-
-    MoveWindow(g_comboHands, margin, margin, sideWidth - 2 * margin, 200, TRUE);
+ 
 
     int statusTop = margin + 220;
     int statusHeight = h - bottomHeight - statusTop - margin;
@@ -954,16 +953,6 @@ void PositionControls(HWND hWnd) {
     );
 }
 
-void FillHandsCombo() {
-    const wchar_t* hands[] = {
-        L"High Card", L"One Pair", L"Two Pair", L"Three of a Kind",
-        L"Straight", L"Flush", L"Full House", L"Four of a Kind",
-        L"Straight Flush", L"Royal Flush"
-    };
-    for (auto& h : hands)
-        SendMessage(g_comboHands, CB_ADDSTRING, 0, (LPARAM)h);
-    SendMessage(g_comboHands, CB_SETCURSEL, g_selectedComboIndex, 0);
-}
 
 // UI State Mutator called explicitly whenever client receives a server update packet
 void UpdateUIFromGameState(HWND hWnd, const GameState& state) {
@@ -973,11 +962,9 @@ void UpdateUIFromGameState(HWND hWnd, const GameState& state) {
     g_players = state.players;
     g_playerChips = state.playerChips;
     g_heroChips = state.heroChips;
-    g_selectedComboIndex = state.selectedComboIndex;
 
     EnsurePlayerChipDefaults();
 
-    SendMessage(g_comboHands, CB_SETCURSEL, g_selectedComboIndex, 0);
     SendMessage(g_listPlayers, LB_RESETCONTENT, 0, 0);
     for (auto& p : g_players)
         SendMessage(g_listPlayers, LB_ADDSTRING, 0, (LPARAM)p.c_str());
@@ -1239,16 +1226,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
 
     ShowRaiseControls(false);
 
-    g_comboHands = CreateWindow(
-        WC_COMBOBOX,
-        L"",
-        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
-        0, 0, 0, 0,
-        hWnd,
-        (HMENU)ID_COMBO_HAND,
-        hInst,
-        nullptr
-    );
 
     g_statusLog = CreateWindow(
         WC_LISTBOX,
@@ -1271,7 +1248,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
         hInst,
         nullptr
     );
-    FillHandsCombo();
     PositionControls(hWnd);
 
     AddStatusMessage(L"UI started.");
