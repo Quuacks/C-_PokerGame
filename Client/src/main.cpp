@@ -119,6 +119,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_BAR_CLASSES | ICC_STANDARD_CLASSES };
     InitCommonControlsEx(&icex);
 
+    NetworkClient client;
+    SetNetworkClientForUI(&client);
+
+    if (!client.ConnectToServer("127.0.0.1", 54000)) {
+        MessageBox(nullptr, L"Failed to connect to poker server!", L"Error", MB_ICONERROR);
+        WSACleanup();
+        return 0;
+    }
+
     // 4. Initialize Network Client instance
     std::string localUsername = ShowLoginPage(hInstance);
 
@@ -130,15 +139,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             fclose(fp);
 
         FreeConsole();
-        WSACleanup();
-        return 0;
-    }
-
-    NetworkClient client;
-    SetNetworkClientForUI(&client); // Pass the client pointer to UI backend!
-
-    if (!client.ConnectToServer("127.0.0.1", 54000)) {
-        MessageBox(nullptr, L"Failed to connect to poker server!", L"Error", MB_ICONERROR);
         WSACleanup();
         return 0;
     }

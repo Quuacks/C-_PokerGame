@@ -61,10 +61,8 @@ void NetworkManager::Update(std::vector<std::shared_ptr<Player>>& authenticatedP
 
     FD_SET(m_ListeningSocket, &m_ReadSet);
 
-    for (const auto& playerPtr : authenticatedPlayers) {
-        if (playerPtr) {
-            FD_SET(playerPtr->getSocket(), &m_ReadSet);
-        }
+    for (SOCKET rawSock : m_RawSockets) {
+        FD_SET(rawSock, &m_ReadSet);
     }
 
     timeval timeout;
@@ -79,6 +77,8 @@ void NetworkManager::Update(std::vector<std::shared_ptr<Player>>& authenticatedP
     }
 
     if (activity > 0) {
+        HandleNewConnections();
+
         PollRawSockets(rawCallback);
 
         PollAuthenticatedPlayers(authenticatedPlayers, playerCallback);
@@ -86,31 +86,47 @@ void NetworkManager::Update(std::vector<std::shared_ptr<Player>>& authenticatedP
 }
 
 void NetworkManager::HandleNewConnections() {
-    sockaddr_in client;
-    int clientSize = sizeof(client);
+    if (FD_ISSET(m_ListeningSocket, &m_ReadSet)) {
+        sockaddr_in client;
+        int clientSize = sizeof(client);
 
-    SOCKET clientSocket = accept(m_ListeningSocket, (sockaddr*)&client, &clientSize);
+        SOCKET clientSocket = accept(m_ListeningSocket, (sockaddr*)&client, &clientSize);
 
-    if (clientSocket != INVALID_SOCKET) {
-        // Set the new client socket to non-blocking too so recv() doesn't freeze us
-        u_long mode = 1;
-        ioctlsocket(clientSocket, FIONBIO, &mode);
+        if (clientSocket != INVALID_SOCKET) {
+            u_long mode = 1;
+            ioctlsocket(clientSocket, FIONBIO, &mode); // Set to non-blocking
 
-        m_RawSockets.push_back(clientSocket);
-        std::cout << "[NET] Raw Connection established waiting for Login: \n";
+            m_RawSockets.push_back(clientSocket);
+            std::cout << "[Net] Raw Connection established on socket " << clientSocket << ", waiting for Login...\n";
+        }
     }
 }
 void NetworkManager::PollRawSockets(std::function<void(SOCKET, const std::string&)> rawCallback) {
-    if (FD_ISSET(m_ListeningSocket, &m_ReadSet)) {
-        sockaddr_in clientAddr;
-        int addrLen = sizeof(clientAddr);
+    for (auto it = m_RawSockets.begin(); it != m_RawSockets.end(); ) {
+        SOCKET rawSock = *it;
 
-        SOCKET newClientSocket = accept(m_ListeningSocket, (sockaddr*)&clientAddr, &addrLen);
-        if (newClientSocket != INVALID_SOCKET) {
-            std::cout << "[NETWORK] Raw client connection accepted on socket: " << newClientSocket << "\n";
+        if (FD_ISSET(rawSock, &m_ReadSet)) {
+            char buffer[4096];
+            int bytesReceived = recv(rawSock, buffer, sizeof(buffer) - 1, 0);
 
-            //Listen for Login payload
+            if (bytesReceived <= 0) {
+                // Client disconnected before logging in
+                std::cout << "[NETWORK] Raw client dropped connection on socket: " << rawSock << "\n";
+                closesocket(rawSock);
+                it = m_RawSockets.erase(it);
+                continue;
+            }
+            else {
+                buffer[bytesReceived] = '\0';
+                std::string message(buffer);
+
+                rawCallback(rawSock, message);
+
+                it = m_RawSockets.begin();
+                continue;
+            }
         }
+        ++it;
     }
 }
 
@@ -128,6 +144,13 @@ void NetworkManager::PollAuthenticatedPlayers(
             int bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
             if (bytesReceived <= 0) {
+                int error = WSAGetLastError();
+
+                if (bytesReceived == SOCKET_ERROR && error == WSAEWOULDBLOCK) {
+                    ++it;
+                    continue;
+                }
+
                 std::cout << "[NETWORK] Player disconnected: " << playerPtr->GetUsername() << "\n";
                 closesocket(clientSocket);
                 it = players.erase(it);
@@ -144,11 +167,15 @@ void NetworkManager::PollAuthenticatedPlayers(
 }
 
 void NetworkManager::MoveRawSocketToPlayer(SOCKET socket) {
-    for (auto it = m_RawSockets.begin(); it != m_RawSockets.end(); ++it) {
-        if (*it == socket) {
-            m_RawSockets.erase(it);
-            break;
-        }
+    auto it = std::find(m_RawSockets.begin(), m_RawSockets.end(), socket);
+
+    if (it != m_RawSockets.end()) {
+        m_RawSockets.erase(it);
+        std::cout << "[NETWORK] Cleanly removed socket " << socket << " from raw connection pool.\n";
+    }
+    else {
+        // If it gets here, it means PollRawSockets already handled the erasure, which is perfect.
+        std::cout << "[NETWORK] Socket " << socket << " was already cleared from raw pool. Skipping safely.\n";
     }
 }
 
@@ -166,4 +193,6 @@ void NetworkManager::Shutdown() {
         closesocket(m_ListeningSocket);
         m_ListeningSocket = INVALID_SOCKET;
     }
+
+    WSACleanup();
 }

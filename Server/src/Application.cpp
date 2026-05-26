@@ -70,17 +70,25 @@ void Application::HandleRawMessage(SOCKET rawSocket, const std::string& message)
     
 }
 
-void Application::HandlePlayerMessage(Player& player, const std::string& message) {
-    size_t delimiterPos = message.find('|');
+void Application::HandlePlayerMessage(Player& player, const std::string& message) {    
+    try {
+        json packet = json::parse(message);
+        std::string type = packet.value("type", "");
 
-    if (delimiterPos == std::string::npos)
-        return;
+        auto it = m_Handlers.find(type);
+        if (it != m_Handlers.end()) {
+            it->second->ExecutePlayer(*this, player, packet);
+        }
+        else {
+            std::cout << "[Server] Uknown player action " << type << "\n";
+        }
 
-    std::string type = message.substr(0, delimiterPos);
-    std::string payload = message.substr(delimiterPos + 1);
+    }
+    catch (const json::parse_error& e){
+        std::cout << "[Server] JSON Parse Error from player " << player.GetUsername() << ": " << e.what() << "\n";
+    }
 
-    //game logic parsing here. Things like Player Actions
-    std::cout << "TYPE: " << type << "   PAYLOAD: " << payload << "\n";
+    
 }
 
 void Application::AddAuthenticatedPlayer(SOCKET socket, const std::string& username) {
@@ -92,7 +100,7 @@ void Application::AddAuthenticatedPlayer(SOCKET socket, const std::string& usern
     
     m_Table.AddPlayer(newPlayer);
 
-    //Check how many players are currently
+    m_NetworkManager.MoveRawSocketToPlayer(socket);
 }
 
 void Application::BroadcastGameState()
