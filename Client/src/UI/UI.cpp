@@ -824,6 +824,37 @@ void AddStatusMessageFromUtf8(const std::string& message)
 {
     AddStatusMessage(Utf8ToWide(message));
 }
+
+bool SendPlayerActionToServer(const std::string& actionType, json data = json::object())
+{
+    if (!g_NetworkClient)
+    {
+        AddStatusMessage(L"Cannot send action: client is not connected.");
+        return false;
+    }
+
+    if (!data.is_object())
+        data = json::object();
+
+    // Include the action type both at the packet level and inside data.
+    // This keeps it compatible with the current server handler style.
+    data["type"] = actionType;
+
+    json packet = {
+        {"type", actionType},
+        {"data", data}
+    };
+
+    bool sent = g_NetworkClient->SendRequest(packet.dump() + "\n");
+
+    if (sent)
+        AddStatusMessageFromUtf8("Sent " + actionType + " request.");
+    else
+        AddStatusMessageFromUtf8("Failed to send " + actionType + " request.");
+
+    return sent;
+}
+
 void ShowRaiseControls(bool show) {
     g_raiseControlsVisible = show;
 
@@ -1039,14 +1070,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             wsprintf(statusBuffer, L"Raise amount selected: %d", raiseAmount);
             AddStatusMessage(statusBuffer);
 
-            // NETWORK LINK: Fire structural RAISE request
-            if (g_NetworkClient) {
-                json packet = {
-                    {"type", "RAISE"},
-                    {"data", {{"amount", raiseAmount}}}
-                };
-                //g_NetworkClient->SendRequest(packet.dump() + "\n");
-            }
+            json data = {
+                {"amount", raiseAmount}
+            };
+
+            SendPlayerActionToServer("RAISE", data);
             break;
         }
 
@@ -1065,10 +1093,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ShowRaiseControls(false);
             AddStatusMessage(L"Call selected.");
 
-            if (g_NetworkClient) {
-                json packet = { {"type", "CALL"}, {"data", json::object()} };
-                //g_NetworkClient->SendRequest(packet.dump() + "\n");
-            }
+            SendPlayerActionToServer("CALL");
+            
             break;
 
         case ID_BTN_CHECK:
@@ -1080,11 +1106,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             ShowRaiseControls(false);
             AddStatusMessage(L"Check selected.");
+            
+            SendPlayerActionToServer("CHECK");
 
-            if (g_NetworkClient) {
-                json packet = { {"type", "CHECK"}, {"data", json::object()} };
-                //g_NetworkClient->SendRequest(packet.dump() + "\n");
-            }
             break;
 
         case ID_BTN_FOLD:
@@ -1097,10 +1121,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ShowRaiseControls(false);
             AddStatusMessage(L"Fold selected.");
 
-            if (g_NetworkClient) {
-                json packet = { {"type", "FOLD"}, {"data", json::object()} };
-                //g_NetworkClient->SendRequest(packet.dump() + "\n");
-            }
+            SendPlayerActionToServer("FOLD");
             break;
         }
         break;
