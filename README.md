@@ -71,17 +71,17 @@ This project implements a poker game where multiple players can connect to a ser
 * Added a Start Game button that sends a request to the server before a hand starts.
   ---
 
-## Team Member 3
+## Team Member 3 Daugirdas Pelanis (Frontend, Win32 UI and integration)
 
 ### Contributions
 
-*
-*
-*
-*
-*
-
----
+* Worked on the frontend side of the project and helped develop the custom Win32 client interface.
+* Implemented and improved the poker table UI layout, including player positions, cards, buttons, chip display, and overall table visuals.
+* Worked with visual assets such as card and chip textures to make the client interface look more like a real poker table.
+* Helped improve user interaction in the client, including game controls, action buttons, and visual feedback during gameplay.
+* Hooked up the frontend with the backend/client networking system so the UI could receive and react to real game state updates from the server.
+* Helped connect server-sent game state data to the client UI, allowing player information, cards, chips, pot values, and turn-related updates to be displayed.
+* Contributed to making the client interface more user-friendly, responsive, and suitable for multiplayer gameplay.
 
 ---
 
