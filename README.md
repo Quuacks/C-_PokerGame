@@ -55,17 +55,21 @@ This project implements a poker game where multiple players can connect to a ser
 * Implemented game logic. Things like creating a deck, shuffling it, dealing cards, all the actions (Call, Raise, Fold, Check).
 ---
 
-## Team Member 2
+## Team Member 2 Mykolas Liandzbergas (Frontend and client UI)
 
 ### Contributions
 
-*
-*
-*
-*
-*
-
----
+* Worked on the client-side UI and poker table interface.
+* Implemented the raise slider with manual amount input, confirm, and cancel functionality.
+* Added a status/message log for displaying player actions, server messages, login status, and game events.
+* Implemented chip rendering for player chip stacks, the main pot, and raise amount preview.
+* Improved player positioning around the table with player names, chip amounts, and chip stacks.
+* Added a “Your Turn” popup and highlighted action buttons when it is the player’s turn.
+* Disabled Raise, Call, Check, and Fold buttons when it is not the player’s turn.
+* Added a username login window and connected the entered username to the login request.
+* Connected UI buttons to the server by sending JSON requests for Raise, Call, Check, and Fold.
+* Added a Start Game button that sends a request to the server before a hand starts.
+  ---
 
 ## Team Member 3
 
